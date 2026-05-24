@@ -1,13 +1,15 @@
-
-
 import asyncio
 
 from composition_root.setup.setup import setup
+from composition_root.runtime.logger import get_logger
+
+
+logger = get_logger("main")
 
 if __name__ == "__main__":
-    print("[main] Starting microphone microservice process")
+    logger.info("Starting microphone microservice process")
     try:
         asyncio.run(setup())
-        print("[main] Microphone microservice process exited normally")
+        logger.info("Microphone microservice process exited normally")
     except KeyboardInterrupt:
-        print("[main] Keyboard interrupt received. Exiting.")
+        logger.info("Keyboard interrupt received. Exiting.")

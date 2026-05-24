@@ -16,8 +16,13 @@ from application.dtos.adapter_outbound_dtos import (
     GetStreamResponseDto
 )
 from application.ports.adapter_outbound_port import AdapterOutboundPort
+from composition_root.runtime.logger import get_logger
 
 import numpy as np
+
+
+logger = get_logger("outbound")
+stream_logger = get_logger("audio-stream")
 
 class SoundDeviceAsyncStream(AsyncIterator[bytes]):
 
@@ -26,10 +31,11 @@ class SoundDeviceAsyncStream(AsyncIterator[bytes]):
         self._chunk_size = chunk_size
         self._input_channels = input_channels
         self._closed = False
-        print(
-            "[audio-stream] Initialized "
-            f"chunk_size={chunk_size}, input_channels={input_channels}, "
-            f"stream_active={getattr(stream, 'active', 'unknown')}"
+        stream_logger.info(
+            "Initialized",
+            chunk_size=chunk_size,
+            input_channels=input_channels,
+            stream_active=getattr(stream, "active", "unknown"),
         )
 
         # Telemetry counters
@@ -38,30 +44,31 @@ class SoundDeviceAsyncStream(AsyncIterator[bytes]):
         self._overflow_count: int = 0
 
     def __aiter__(self):
-        print("[audio-stream] __aiter__ called")
+        stream_logger.trace("__aiter__ called")
         return self
 
     async def __anext__(self) -> bytes:
         if self._closed:
-            print("[audio-stream] __anext__ called after closed; stopping iteration")
+            stream_logger.trace("__anext__ called after closed; stopping iteration")
             raise StopAsyncIteration
 
         try:
-            print(f"[audio-stream] Reading chunk #{self._chunk_count + 1}")
+            stream_logger.trace("Reading chunk", chunk_number=self._chunk_count + 1)
             data, overflowed = await asyncio.to_thread(
                 self._stream.read, 
                 self._chunk_size
             )
-            print(
-                f"[audio-stream] Raw read returned overflowed={overflowed}, "
-                f"bytes={len(bytes(data))}"
+            stream_logger.trace(
+                "Raw read returned",
+                overflowed=overflowed,
+                bytes=len(bytes(data)),
             )
 
             chunk = bytes(data)
 
             # Convert stereo -> mono without audioop
             if self._input_channels > 1:
-                print(f"[audio-stream] Downmixing {self._input_channels} channels to mono")
+                stream_logger.trace("Downmixing channels to mono", input_channels=self._input_channels)
                 samples = np.frombuffer(chunk, dtype=np.int16)
 
                 # Reshape into [frames, channels]
@@ -84,11 +91,11 @@ class SoundDeviceAsyncStream(AsyncIterator[bytes]):
             return chunk
 
         except asyncio.CancelledError:
-            print("[audio-stream] Streaming response was cancelled by client/server")
+            stream_logger.warn("Streaming response was cancelled by client/server")
             self._closed = True
             raise
         except Exception as error:
-            print(f"\n  Microphone stream read failed: {error!r}")
+            stream_logger.error("Microphone stream read failed", error=repr(error))
             self._closed = True
             raise StopAsyncIteration
 
@@ -125,7 +132,7 @@ class SoundDeviceAsyncStream(AsyncIterator[bytes]):
         sys.stdout.flush()
 
     async def close(self):
-        print(f"[audio-stream] close requested closed={self._closed}")
+        stream_logger.info("close requested", closed=self._closed)
         if not self._closed:
             # Move to a new line so the close summary doesn't overwrite the live meter
             print(
@@ -160,40 +167,42 @@ class MicrophoneAdapter(AdapterOutboundPort):
         # Store configuration primitives internally
         self.default_fallback_rate = config.default_fallback_rate
         self.target_keywords = config.target_keywords
-        print(
-            "[outbound] MicrophoneAdapter initialized "
-            f"default_fallback_rate={self.default_fallback_rate}, "
-            f"target_keywords={self.target_keywords}"
+        logger.info(
+            "MicrophoneAdapter initialized",
+            default_fallback_rate=self.default_fallback_rate,
+            target_keywords=self.target_keywords,
         )
 
     @property
     def sample_rate(self) -> int:
         if self.mic_sample_rate is None:
-            print("[outbound] sample_rate requested but no stream is active")
+            logger.warn("sample_rate requested but no stream is active")
             raise RuntimeError("Microphone sample rate is not available")
-        print(f"[outbound] sample_rate requested value={self.mic_sample_rate}")
+        logger.trace("sample_rate requested", value=self.mic_sample_rate)
         return self.mic_sample_rate
 
     @property
     def chunk_size(self) -> int:
         if self.mic_chunk_size is None:
-            print("[outbound] chunk_size requested but no stream is active")
+            logger.warn("chunk_size requested but no stream is active")
             raise RuntimeError("Microphone chunk size is not available")
-        print(f"[outbound] chunk_size requested value={self.mic_chunk_size}")
+        logger.trace("chunk_size requested", value=self.mic_chunk_size)
         return self.mic_chunk_size
 
     async def start_stream(self, request: StartMicrophoneStreamRequestDto) -> StartMicrophoneStreamResponseDto:
-        print(
-            "[outbound] start_stream received "
-            f"sample_rate={request.sample_rate}, channels={request.channels}, "
-            f"chunk_size={request.chunk_size}, started={self.started}"
+        logger.info(
+            "start_stream received",
+            sample_rate=request.sample_rate,
+            channels=request.channels,
+            chunk_size=request.chunk_size,
+            started=self.started,
         )
         if request.sample_rate <= 0 or request.channels <= 0 or request.chunk_size <= 0:
-            print("[outbound] start_stream rejected invalid parameters")
+            logger.warn("start_stream rejected invalid parameters")
             raise ValueError("Invalid microphone stream parameters")
         
         if self.started:
-            print("[outbound] start_stream rejected because stream is already started")
+            logger.warn("start_stream rejected because stream is already started")
             raise RuntimeError("Microphone stream already started")
         
         self.mic_sample_rate = request.sample_rate
@@ -201,28 +210,34 @@ class MicrophoneAdapter(AdapterOutboundPort):
         self.mic_chunk_size = request.chunk_size
 
         try:
-            print("[outbound] Finding microphone device")
+            logger.info("Finding microphone device")
             self.device_index = self.find_microphone_index()
-            print(f"Using microphone device index: {self.device_index}")
+            logger.info("Using microphone device index", device_index=self.device_index)
             
             device_info = sd.query_devices(self.device_index)
-            print(f"[outbound] Selected device info: {device_info}")
+            logger.trace("Selected device info", device_info=device_info)
             # Use our DTO fallback setting if default_samplerate is missing
             default_rate = int(device_info.get('default_samplerate', self.default_fallback_rate))
             
             if self.mic_sample_rate != default_rate:
-                print(f"  Warning: Requested rate {self.mic_sample_rate}Hz may not be supported.")
-                print(f"  Device default: {default_rate}Hz")
+                logger.warn(
+                    "Requested sample rate may not be supported",
+                    requested_rate=self.mic_sample_rate,
+                    device_default_rate=default_rate,
+                )
                 
         except Exception as e:
-            print(f"Error finding microphone: {e}")
+            logger.error("Error finding microphone", error=str(e))
             raise RuntimeError("No microphone devices available")
 
         try:
-            print(
-                "[outbound] Opening RawInputStream "
-                f"samplerate={self.mic_sample_rate}, blocksize={self.mic_chunk_size}, "
-                f"device={self.device_index}, channels={self.mic_channels}, dtype=int16"
+            logger.info(
+                "Opening RawInputStream",
+                samplerate=self.mic_sample_rate,
+                blocksize=self.mic_chunk_size,
+                device=self.device_index,
+                channels=self.mic_channels,
+                dtype="int16",
             )
             self.audio_stream = sd.RawInputStream(
                 samplerate=self.mic_sample_rate,
@@ -232,15 +247,23 @@ class MicrophoneAdapter(AdapterOutboundPort):
                 dtype='int16'
             )
             self.audio_stream.start()
-            print(f"[outbound] RawInputStream started active={self.audio_stream.active}")
+            logger.info("RawInputStream started", active=self.audio_stream.active)
         except Exception as e:
-            print(f"  Failed to open at {self.mic_sample_rate}Hz. Retrying with hardware default {default_rate}Hz...")
+            logger.warn(
+                "Failed to open requested rate; retrying with hardware default",
+                requested_rate=self.mic_sample_rate,
+                default_rate=default_rate,
+                error=repr(e),
+            )
             self.mic_sample_rate = default_rate
             try:
-                print(
-                    "[outbound] Retrying RawInputStream with hardware default "
-                    f"samplerate={self.mic_sample_rate}, blocksize={self.mic_chunk_size}, "
-                    f"device={self.device_index}, channels={self.mic_channels}, dtype=int16"
+                logger.info(
+                    "Retrying RawInputStream with hardware default",
+                    samplerate=self.mic_sample_rate,
+                    blocksize=self.mic_chunk_size,
+                    device=self.device_index,
+                    channels=self.mic_channels,
+                    dtype="int16",
                 )
                 self.audio_stream = sd.RawInputStream(
                     samplerate=self.mic_sample_rate,
@@ -250,15 +273,18 @@ class MicrophoneAdapter(AdapterOutboundPort):
                     dtype='int16'
                 )
                 self.audio_stream.start()
-                print(f"[outbound] RawInputStream retry started active={self.audio_stream.active}")
+                logger.info("RawInputStream retry started", active=self.audio_stream.active)
             except Exception as e2:
                 if self.mic_channels == 1:
-                    print(f"  Mono failed. Retrying with Stereo (2 channels)...")
+                    logger.warn("Mono failed; retrying with stereo", error=repr(e2))
                     self.mic_channels = 2
-                    print(
-                        "[outbound] Retrying RawInputStream in stereo "
-                        f"samplerate={self.mic_sample_rate}, blocksize={self.mic_chunk_size}, "
-                        f"device={self.device_index}, channels={self.mic_channels}, dtype=int16"
+                    logger.info(
+                        "Retrying RawInputStream in stereo",
+                        samplerate=self.mic_sample_rate,
+                        blocksize=self.mic_chunk_size,
+                        device=self.device_index,
+                        channels=self.mic_channels,
+                        dtype="int16",
                     )
                     self.audio_stream = sd.RawInputStream(
                         samplerate=self.mic_sample_rate,
@@ -268,12 +294,12 @@ class MicrophoneAdapter(AdapterOutboundPort):
                         dtype='int16'
                     )
                     self.audio_stream.start()
-                    print(f"[outbound] Stereo RawInputStream started active={self.audio_stream.active}")
+                    logger.info("Stereo RawInputStream started", active=self.audio_stream.active)
                 else:
-                    print(f"[outbound] RawInputStream retry failed: {e2!r}")
+                    logger.error("RawInputStream retry failed", error=repr(e2))
                     raise e2
 
-        print("[outbound] Creating async stream wrapper")
+        logger.info("Creating async stream wrapper")
         self.loop_stream = SoundDeviceAsyncStream(
             stream=self.audio_stream,
             chunk_size=self.mic_chunk_size,
@@ -281,18 +307,23 @@ class MicrophoneAdapter(AdapterOutboundPort):
         )
         self._mic_stream = self.loop_stream
         self.started = True
-        print(
-            "[outbound] Runtime state set "
-            f"started={self.started}, device_index={self.device_index}, "
-            f"sample_rate={self.mic_sample_rate}, chunk_size={self.mic_chunk_size}, "
-            f"channels={self.mic_channels}"
+        logger.info(
+            "Runtime state set",
+            started=self.started,
+            device_index=self.device_index,
+            sample_rate=self.mic_sample_rate,
+            chunk_size=self.mic_chunk_size,
+            channels=self.mic_channels,
         )
         
-        print(f"  Microphone successfully started:")
-        print(f"    - Device Index: {self.device_index}")
-        print(f"    - Sample Rate: {self.mic_sample_rate}Hz")
-        print(f"    - Channels: {self.mic_channels} ({'Mono' if self.mic_channels==1 else 'Stereo'})")
-        print(f"    - Chunk Size: {self.mic_chunk_size} frames")
+        logger.info(
+            "Microphone successfully started",
+            device_index=self.device_index,
+            sample_rate=self.mic_sample_rate,
+            channels=self.mic_channels,
+            channel_mode="Mono" if self.mic_channels == 1 else "Stereo",
+            chunk_size=self.mic_chunk_size,
+        )
 
         return StartMicrophoneStreamResponseDto(
             stream=self.loop_stream,
@@ -300,53 +331,54 @@ class MicrophoneAdapter(AdapterOutboundPort):
         )
 
     async def stop_stream(self, request: StopMicrophoneStreamRequestDto) -> StopMicrophoneStreamResponseDto:
-        print(f"[outbound] stop_stream received started={self.started}")
+        logger.info("stop_stream received", started=self.started)
         if not self.started:
-            print("[outbound] stop_stream no active stream; returning success")
+            logger.info("stop_stream no active stream; returning success")
             return StopMicrophoneStreamResponseDto(success=True)
         try:
             if self.loop_stream is not None:
-                print("[outbound] Closing async stream wrapper")
+                logger.info("Closing async stream wrapper")
                 await self.loop_stream.close()
                 self.loop_stream = None
                 self._mic_stream = None
 
             if self.audio_stream is not None:
-                print(f"[outbound] Closing RawInputStream active={self.audio_stream.active}")
+                logger.info("Closing RawInputStream", active=self.audio_stream.active)
                 if self.audio_stream.active:
-                    print("[outbound] Stopping RawInputStream")
+                    logger.info("Stopping RawInputStream")
                     self.audio_stream.stop()
-                print("[outbound] Closing RawInputStream")
+                logger.info("Closing RawInputStream")
                 self.audio_stream.close()
                 self.audio_stream = None
 
-            print("[outbound] Clearing runtime state")
+            logger.info("Clearing runtime state")
             self.started = False
             self.device_index = None
             self.mic_sample_rate = None
             self.mic_chunk_size = None
             self.mic_channels = None
 
-            print("[outbound] stop_stream completed")
+            logger.info("stop_stream completed")
             return StopMicrophoneStreamResponseDto(success=True)
         except Exception as error:
-            print(f"[outbound] stop_stream failed: {error!r}")
+            logger.error("stop_stream failed", error=repr(error))
             raise RuntimeError(f"Failed to stop microphone stream: {error}") from error
 
     async def is_available(self, request: MicrophoneAvailabilityRequestDto) -> MicrophoneAvailabilityResponseDto:
-        print(f"[outbound] is_available requested started={self.started}")
+        logger.info("is_available requested", started=self.started)
         return MicrophoneAvailabilityResponseDto(is_available=self.started)
 
     def mic_stream(self, request: GetStreamRequestDto) -> GetStreamResponseDto:
-        print(
-            "[outbound] mic_stream requested "
-            f"started={self.started}, has_stream={self._mic_stream is not None}, "
-            f"sample_rate={self.mic_sample_rate}"
+        logger.info(
+            "mic_stream requested",
+            started=self.started,
+            has_stream=self._mic_stream is not None,
+            sample_rate=self.mic_sample_rate,
         )
         if not self.started or self._mic_stream is None:
-            print("[outbound] mic_stream rejected because stream is not active")
+            logger.warn("mic_stream rejected because stream is not active")
             raise RuntimeError("Microphone stream is not active")
-        print("[outbound] mic_stream returning active stream")
+        logger.info("mic_stream returning active stream")
         return GetStreamResponseDto(
             stream=self._mic_stream,
             sample_rate=self.mic_sample_rate if self.mic_sample_rate is not None else self.default_fallback_rate
@@ -355,32 +387,35 @@ class MicrophoneAdapter(AdapterOutboundPort):
     def find_microphone_index(self) -> int:
         """Programmatically find the best microphone index"""
         devices = sd.query_devices()
-        print(f"[outbound] Scanning for microphones; devices_found={len(devices)}")
+        logger.info("Scanning for microphones", devices_found=len(devices))
         
         for i, info in enumerate(devices):
             if int(info.get('max_input_channels', 0)) > 0:
                 name: str = str(info.get('name'))
                 channels = int(info.get('max_input_channels', 0))
                 default_rate = info.get('default_samplerate', 'unknown')
-                print(
-                    f"[outbound] Found input device id={i}, name={name!r}, "
-                    f"max_input_channels={channels}, default_samplerate={default_rate}"
+                logger.trace(
+                    "Found input device",
+                    device_id=i,
+                    name=name,
+                    max_input_channels=channels,
+                    default_samplerate=default_rate,
                 )
                 
                 # Uses the keywords parsed directly from our DTO
                 if any(key.lower() in name.lower() for key in self.target_keywords):
-                    print(f"[outbound] Auto-selected keyword match name={name!r}, id={i}")
+                    logger.info("Auto-selected keyword match", name=name, device_id=i)
                     return i
 
         try:
             default_input = sd.default.device[0]
-            print(f"[outbound] No keyword match; OS default input index={default_input}")
+            logger.info("No keyword match; using OS default input", default_input=default_input)
             if default_input is not None:
                 default_info = sd.query_devices(default_input)
-                print(f"[outbound] Using default input device name={default_info['name']!r}")
+                logger.info("Using default input device", name=default_info["name"])
                 return default_input
             else:
                 raise RuntimeError("No default input device configured in OS")
         except Exception:
-            print("[outbound] Warning: No microphones found at all")
+            logger.warn("No microphones found")
             raise RuntimeError("No microphone devices available")

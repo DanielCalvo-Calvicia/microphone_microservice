@@ -33,44 +33,48 @@ from application.dtos.mapper.service_to_adapter_inbound import (
     map_service_to_adapter_availability_response,
     map_service_to_adapter_get_stream_response
 )
+from composition_root.runtime.logger import get_logger
+
+
+logger = get_logger("http")
 
 class FastApiAdapter(AdapterInboundPort):
     def __init__(self, service_port: ServicePort, app: FastAPI):
         self.service_port = service_port
         self.app = app
 
-        print("[http] FastApiAdapter initialized")
+        logger.info("FastApiAdapter initialized")
         self.register_routes(self.app)
 
     def register_routes(self, app: FastAPI):
-        print("[http] Registering HTTP routes")
+        logger.info("Registering HTTP routes")
         @app.post("/start", status_code=status.HTTP_200_OK)
         async def handle_start_stream(request: StartMicrophoneStreamRequestDto):
-            print(
-                "[http] POST /start received "
-                f"sample_rate={request.sample_rate}, channels={request.channels}, "
-                f"chunk_size={request.chunk_size}"
+            logger.info(
+                "POST /start received",
+                sample_rate=request.sample_rate,
+                channels=request.channels,
+                chunk_size=request.chunk_size,
             )
             try:
                 response = await self.start_stream(request)
-                print(f"[http] POST /start succeeded sample_rate={response.sample_rate}")
+                logger.info("POST /start succeeded", sample_rate=response.sample_rate)
 
-                http_response = JSONResponse(
+                http_response = StreamingResponse(
+                    response.stream,
+                    media_type="application/octet-stream",
                     status_code=status.HTTP_200_OK,
-                    content={
-                        "action": "start_stream",
-                        "status": "success",
-                        "status_code": status.HTTP_200_OK,
-                        "message": "Microphone stream started successfully",
-                        "timestamp": time.time(),
-                        "data": {
-                            "sample_rate": response.sample_rate,
-                        },
+                    headers={
+                        "X-Sample-Rate": str(response.sample_rate),
+                        "X-Action": "start_stream",
+                        "X-Status": "success",
+                        "X-Message": "Microphone stream started successfully",
+                        "X-Timestamp": str(time.time()),
                     }
                 )
                 return http_response
             except Exception as e:
-                print(f"[http] POST /start failed: {e!r}")
+                logger.error("POST /start failed", error=repr(e))
                 return JSONResponse(
                     status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                     content={
@@ -86,10 +90,10 @@ class FastApiAdapter(AdapterInboundPort):
             
         @app.post("/stop", status_code=status.HTTP_200_OK)
         async def handle_stop_stream(request: StopMicrophoneStreamRequestDto):
-            print("[http] POST /stop received")
+            logger.info("POST /stop received")
             try:
                 response = await self.stop_stream(request)
-                print(f"[http] POST /stop succeeded success={response.success}")
+                logger.info("POST /stop succeeded", success=response.success)
                 http_response = JSONResponse(
                     status_code=status.HTTP_200_OK,
                     content={
@@ -103,7 +107,7 @@ class FastApiAdapter(AdapterInboundPort):
                 )
                 return http_response
             except Exception as e:
-                print(f"[http] POST /stop failed: {e!r}")
+                logger.error("POST /stop failed", error=repr(e))
                 return JSONResponse(
                     status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                     content={
@@ -118,11 +122,11 @@ class FastApiAdapter(AdapterInboundPort):
 
         @app.get("/available", status_code=status.HTTP_200_OK)
         async def handle_check_availability():
-            print("[http] GET /available received")
+            logger.info("GET /available received")
             try:
                 request_dto = MicrophoneAvailabilityRequestDto()
                 response = await self.is_available(request_dto)
-                print(f"[http] GET /available succeeded is_available={response.is_available}")
+                logger.info("GET /available succeeded", is_available=response.is_available)
                 http_response = JSONResponse(
                     status_code=status.HTTP_200_OK,
                     content={
@@ -136,7 +140,7 @@ class FastApiAdapter(AdapterInboundPort):
                 )
                 return http_response
             except Exception as e:
-                print(f"[http] GET /available failed: {e!r}")
+                logger.error("GET /available failed", error=repr(e))
                 return JSONResponse(
                     status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                     content={
@@ -150,11 +154,11 @@ class FastApiAdapter(AdapterInboundPort):
                 )
         @app.get("/stream", status_code=status.HTTP_200_OK)
         async def handle_get_stream():
-            print("[http] GET /stream received")
+            logger.info("GET /stream received")
             try:
                 request_dto = GetStreamRequestDto()
                 response = await self.mic_stream(request_dto)
-                print(f"[http] GET /stream succeeded sample_rate={response.sample_rate}; returning StreamingResponse")
+                logger.info("GET /stream succeeded; returning StreamingResponse", sample_rate=response.sample_rate)
                 http_response = StreamingResponse(
                     response.stream,
                     media_type="application/octet-stream",
@@ -165,12 +169,11 @@ class FastApiAdapter(AdapterInboundPort):
                         "X-Status": "success",
                         "X-Message": "Microphone stream retrieved successfully",
                         "X-Timestamp": str(time.time()),
-                        "X-Sample-Rate": str(response.sample_rate),
                     }
                 )
                 return http_response
             except Exception as e:
-                print(f"[http] GET /stream failed: {e!r}")
+                logger.error("GET /stream failed", error=repr(e))
                 return JSONResponse(
                     status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                     content={
@@ -184,7 +187,7 @@ class FastApiAdapter(AdapterInboundPort):
                 )
         @app.get("/health", tags=["Health"])
         async def health_check():
-            print("[http] GET /health received")
+            logger.info("GET /health received")
             return JSONResponse(
                 status_code=status.HTTP_200_OK,
                 content={
@@ -198,50 +201,50 @@ class FastApiAdapter(AdapterInboundPort):
             )
     @property
     def get_app(self) -> Any:
-        print("[http] get_app accessed")
+        logger.trace("get_app accessed")
         return self.app
 
     async def start_stream(self, request: StartMicrophoneStreamRequestDto) -> StartMicrophoneStreamResponseDto:
-        print("[http] Adapter start_stream mapping inbound DTO to service DTO")
+        logger.trace("Adapter start_stream mapping inbound DTO to service DTO")
         
         service_request_dto = map_adapter_to_service_start_request(request)
         
-        print("[http] Adapter start_stream calling service")
+        logger.trace("Adapter start_stream calling service")
         service_response_dto = await self.service_port.start_stream(service_request_dto)
 
-        print("[http] Adapter start_stream mapping service response to inbound DTO")
+        logger.trace("Adapter start_stream mapping service response to inbound DTO")
         adapter_response_dto = map_service_to_adapter_start_response(service_response_dto)
 
-        print("[http] Adapter start_stream completed")
+        logger.info("Adapter start_stream completed")
         return adapter_response_dto
     
 
     async def stop_stream(self, request: StopMicrophoneStreamRequestDto) -> StopMicrophoneStreamResponseDto:
-        print("[http] Adapter stop_stream mapping inbound DTO to service DTO")
+        logger.trace("Adapter stop_stream mapping inbound DTO to service DTO")
         service_request_dto = map_adapter_to_service_stop_request(request)
-        print("[http] Adapter stop_stream calling service")
+        logger.trace("Adapter stop_stream calling service")
         service_response_dto = await self.service_port.stop_stream(service_request_dto)
-        print("[http] Adapter stop_stream mapping service response to inbound DTO")
+        logger.trace("Adapter stop_stream mapping service response to inbound DTO")
         adapter_response_dto = map_service_to_adapter_stop_response(service_response_dto)
-        print("[http] Adapter stop_stream completed")
+        logger.info("Adapter stop_stream completed")
         return adapter_response_dto
 
     async def is_available(self, request: MicrophoneAvailabilityRequestDto) -> MicrophoneAvailabilityResponseDto:
-        print("[http] Adapter is_available mapping inbound DTO to service DTO")
+        logger.trace("Adapter is_available mapping inbound DTO to service DTO")
         service_request_dto = map_adapter_to_service_availability_request(request)
-        print("[http] Adapter is_available calling service")
+        logger.trace("Adapter is_available calling service")
         service_response_dto = await self.service_port.is_available(service_request_dto)
-        print("[http] Adapter is_available mapping service response to inbound DTO")
+        logger.trace("Adapter is_available mapping service response to inbound DTO")
         adapter_response_dto = map_service_to_adapter_availability_response(service_response_dto)
-        print("[http] Adapter is_available completed")
+        logger.info("Adapter is_available completed")
         return adapter_response_dto
 
     async def mic_stream(self, request: GetStreamRequestDto) -> GetStreamResponseDto:
-        print("[http] Adapter mic_stream mapping inbound DTO to service DTO")
+        logger.trace("Adapter mic_stream mapping inbound DTO to service DTO")
         service_request_dto = map_adapter_to_service_get_stream_request(request)
-        print("[http] Adapter mic_stream calling service")
+        logger.trace("Adapter mic_stream calling service")
         service_response_dto = self.service_port.mic_stream(service_request_dto)
-        print("[http] Adapter mic_stream mapping service response to inbound DTO")
+        logger.trace("Adapter mic_stream mapping service response to inbound DTO")
         adapter_response_dto = map_service_to_adapter_get_stream_response(service_response_dto)
-        print("[http] Adapter mic_stream completed")
+        logger.info("Adapter mic_stream completed")
         return adapter_response_dto

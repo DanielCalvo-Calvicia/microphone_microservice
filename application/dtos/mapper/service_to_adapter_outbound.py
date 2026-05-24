@@ -1,5 +1,9 @@
 from .. import adapter_outbound_dtos as adapter_dtos
 from .. import services_dtos as service_dtos
+from composition_root.runtime.logger import get_logger
+
+
+logger = get_logger("mapper:service->outbound")
 
 
 # =====================================================================
@@ -13,10 +17,11 @@ def map_service_to_adapter_start_request(
     Maps a service layer stream request to an outbound adapter request.
     Executed when entering the adapter from the service layer.
     """
-    print(
-        "[mapper:service->outbound] start request "
-        f"sample_rate={service_dto.sample_rate}, channels={service_dto.channels}, "
-        f"chunk_size={service_dto.chunk_size}"
+    logger.trace(
+        "start request",
+        sample_rate=service_dto.sample_rate,
+        channels=service_dto.channels,
+        chunk_size=service_dto.chunk_size,
     )
     return adapter_dtos.StartMicrophoneStreamRequestDto(
         sample_rate=service_dto.sample_rate,
@@ -36,7 +41,7 @@ def map_service_to_adapter_stop_request(
     Maps a service layer stop request to an outbound adapter stop request.
     Executed when entering the adapter from the service layer.
     """
-    print("[mapper:service->outbound] stop request")
+    logger.trace("stop request")
     return adapter_dtos.StopMicrophoneStreamRequestDto()
 
 
@@ -52,7 +57,7 @@ def map_service_to_adapter_availability_request(
     Maps a service layer availability request to an outbound adapter availability request.
     Executed when entering the adapter from the service layer.
     """
-    print("[mapper:service->outbound] availability request")
+    logger.trace("availability request")
     return adapter_dtos.MicrophoneAvailabilityRequestDto()
 
 # =====================================================================
@@ -66,5 +71,5 @@ def map_service_to_adapter_get_stream_request(
     Maps a service layer get stream request to an outbound adapter get stream request.
     Executed when entering the adapter from the service layer.
     """
-    print("[mapper:service->outbound] get stream request")
+    logger.trace("get stream request")
     return adapter_dtos.GetStreamRequestDto()

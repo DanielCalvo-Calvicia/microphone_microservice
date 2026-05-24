@@ -212,8 +212,9 @@ microphone_microservice/
 | Path | Purpose |
 |---|---|
 | `main.py` | Process entry point. Calls `asyncio.run(setup())`; catches `KeyboardInterrupt`. |
-| `.env` | Local environment file containing `APP_ENV=debug` and `LOG_LEVEL=DEBUG`. Not read by current code directly. |
-| `.env.production` | Production environment file containing `APP_ENV=production` and `LOG_LEVEL=INFO`. Not read by current code directly. |
+| `.env` | Development environment file containing `APP_ENV=development` and `LOG_LEVEL=TRACE`. |
+| `.env.staging` | Staging environment file containing `APP_ENV=staging` and `LOG_LEVEL=WARN`. |
+| `.env.production` | Production environment file containing `APP_ENV=production` and `LOG_LEVEL=CRITICAL`. |
 | `requirements.windows.txt` | Declared dependencies: `fastapi`, `uvicorn`, `sounddevice`, `soundfile`, `numpy`, `pytest`. It omits `httpx`, although `tests/simple.py` imports it. |
 | `.vscode/launch.json` | VS Code debug/run profiles using the checked-in `windows/Scripts/python.exe` interpreter and `.env` files. |
 | `.vscode/settings.json` | VS Code interpreter path and terminal activation setting. |
@@ -714,12 +715,25 @@ No cache layer exists. The only retained state is the active microphone stream a
 
 ### Environment variables
 
-The repository contains `.env` and `.env.production`, and VS Code profiles load them, but the Python runtime code does not read environment variables directly. Host, port, fallback sample rate, and target microphone keywords are hardcoded in the composition root.
+`.vscode/launch.json` is the source of truth for runtime environment selection. The real entry point is `main.py`, which calls `composition_root.setup.setup()` to build the FastAPI dependency graph and start Uvicorn on `127.0.0.1:8000`.
+
+`composition_root/runtime/environment.py` resolves the application environment from VS Code launch profile configuration and the runtime process environment. Supported values are `development`, `staging`, and `production`. Missing or invalid values fall back to `development`.
+
+Resolution precedence is:
+
+1. Process environment: `APP_ENV`, then `VSCODE_ENV`.
+2. Selected VS Code launch profile `env`: `APP_ENV`, then `VSCODE_ENV`.
+3. Selected VS Code launch profile `envFile`: `APP_ENV`, then `VSCODE_ENV`.
+4. Safe default: `development`.
+
+The selected launch profile is identified by `VSCODE_LAUNCH_PROFILE` when present. If it is missing, the resolver matches a launch profile with the same environment value, then falls back to the first launch profile.
 
 | Variable | Required | Default | Purpose | Example |
 |---|---|---|---|---|
-| `APP_ENV` | No | Not used by code | Loaded by VS Code launch profiles; currently not consumed by application logic. | `debug` or `production` |
-| `LOG_LEVEL` | No | Not used by code | Present in env files; currently not passed to Uvicorn in `main.py` setup. | `DEBUG` or `INFO` |
+| `APP_ENV` | No | `development` | Primary application environment value used by the runtime resolver. | `development`, `staging`, `production` |
+| `VSCODE_ENV` | No | `development` | Secondary application environment value if `APP_ENV` is absent. | `development` |
+| `VSCODE_LAUNCH_PROFILE` | No | First matching profile | Names the active VS Code launch profile for fallback resolution. | `Python: Run (development env)` |
+| `LOG_LEVEL` | No | Environment-derived | Present in env files for operator clarity; the custom logger filters by `APP_ENV`. | `TRACE`, `WARN`, `CRITICAL` |
 
 Inferred desirable future variables:
 
@@ -734,9 +748,10 @@ Inferred desirable future variables:
 
 | File | Purpose | Runtime effect |
 |---|---|---|
-| `.env` | Local values: `APP_ENV=debug`, `LOG_LEVEL=DEBUG`. | Used by VS Code debug profile only. |
-| `.env.production` | Production values: `APP_ENV=production`, `LOG_LEVEL=INFO`. | Used by VS Code run profile only. |
-| `.vscode/launch.json` | Defines debug and production launch configs. | Sets interpreter and env file for VS Code. |
+| `.env` | Development values: `APP_ENV=development`, `LOG_LEVEL=TRACE`. | Used by the development VS Code profile. |
+| `.env.staging` | Staging values: `APP_ENV=staging`, `LOG_LEVEL=WARN`. | Used by the staging VS Code profile. |
+| `.env.production` | Production values: `APP_ENV=production`, `LOG_LEVEL=CRITICAL`. | Used by the production VS Code profile. |
+| `.vscode/launch.json` | Defines development, staging, and production launch configs. | Sets interpreter, `APP_ENV`, `VSCODE_LAUNCH_PROFILE`, and env file for VS Code. |
 | `.vscode/settings.json` | Points VS Code to `windows/Scripts/python.exe`. | Editor/runtime convenience. |
 | `requirements.windows.txt` | Declares install dependencies. | Used manually with `pip install -r`. |
 
@@ -747,6 +762,28 @@ None. The current service has no API keys, database credentials, tokens, certifi
 ### Mandatory vs optional settings
 
 No mandatory environment variables exist in current code. A working microphone device and a Python environment with native audio dependencies are mandatory runtime prerequisites.
+
+### Launch profile environment mapping
+
+| VS Code profile | Environment |
+|---|---|
+| `Python: Run (development env)` | `development` |
+| `Python: Run (staging env)` | `staging` |
+| `Python: Run (production env)` | `production` |
+
+To add a new launch profile, copy an existing profile in `.vscode/launch.json`, set `APP_ENV` to one of the supported environment values, set `VSCODE_LAUNCH_PROFILE` to the profile name, and point `envFile` to the matching `.env*` file. Adding a new environment value requires updating `SUPPORTED_ENVIRONMENTS` and `ENVIRONMENT_MIN_LEVEL`.
+
+### Application logging
+
+`composition_root/runtime/logger.py` is the centralized logger for project logs. Each log line includes a UTC timestamp, resolved environment, log level, module/scope name, message, and optional context fields.
+
+| Environment | Custom application logs shown |
+|---|---|
+| `development` | `trace`, `info`, `warn`, `error`, `critical` |
+| `staging` | `warn`, `error`, `critical` |
+| `production` | `critical` only |
+
+FastAPI and Uvicorn logging is not filtered by the custom application logger. Uvicorn request logs, startup logs, shutdown logs, and server errors remain visible in `development`, `staging`, and `production`.
 
 ## Build & Deployment
 
@@ -1123,4 +1160,3 @@ Recommended hardening for derived projects:
 - Device default sample rate should be trusted if the requested rate fails.
 - Stereo can be downmixed to mono by averaging `int16` samples per frame.
 - Stopping when inactive should still return success.
-
