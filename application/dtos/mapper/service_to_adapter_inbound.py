@@ -58,19 +58,3 @@ def map_service_to_adapter_availability_response(
     )
 
 
-# =====================================================================
-# FLOW 4: Getting the Microphone Stream
-# =====================================================================
-
-def map_service_to_adapter_get_stream_response(
-    service_dto: service_dtos.GetStreamResponseDto
-) -> adapter_dtos.GetStreamResponseDto:
-    """
-    Maps a service layer get stream response to an inbound adapter get stream response.
-    Executed when the service returns the stream data to the adapter.
-    """
-    logger.trace("get stream response", sample_rate=service_dto.sample_rate)
-    return adapter_dtos.GetStreamResponseDto(
-        stream=service_dto.stream,
-        sample_rate=service_dto.sample_rate
-    )

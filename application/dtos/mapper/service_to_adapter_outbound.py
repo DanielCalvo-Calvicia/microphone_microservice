@@ -60,16 +60,3 @@ def map_service_to_adapter_availability_request(
     logger.trace("availability request")
     return adapter_dtos.MicrophoneAvailabilityRequestDto()
 
-# =====================================================================
-# FLOW 4: Getting the Microphone Stream
-# =====================================================================
-
-def map_service_to_adapter_get_stream_request(
-    service_dto: service_dtos.GetStreamRequestDto
-) -> adapter_dtos.GetStreamRequestDto:
-    """
-    Maps a service layer get stream request to an outbound adapter get stream request.
-    Executed when entering the adapter from the service layer.
-    """
-    logger.trace("get stream request")
-    return adapter_dtos.GetStreamRequestDto()

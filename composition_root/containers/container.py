@@ -13,7 +13,7 @@ logger = get_logger("container")
 class Container:
     microphone_dependency: MicrophoneDependency
 
-def BuildContainer(name: str):
+def BuildContainer(name: str) -> Container:
     logger.info("Building dependency container", name=name)
     microphone_dependency = generate_microphone_dependency(
         default_fallback_rate=16000,

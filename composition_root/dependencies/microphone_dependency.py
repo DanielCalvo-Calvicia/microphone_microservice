@@ -27,18 +27,19 @@ class MicrophoneDependency:
 
 def generate_microphone_dependency(
     default_fallback_rate: int = 16000,
-    target_keywords: list[str] = [],
+    target_keywords: list[str] | None = None,
     name: str = "Microphone"
-):
+) -> MicrophoneDependency:
+    selected_keywords = [] if target_keywords is None else target_keywords
     logger.info(
         "Generating microphone dependency",
         name=name,
         default_fallback_rate=default_fallback_rate,
-        target_keywords=target_keywords,
+        target_keywords=selected_keywords,
     )
     init_outbound_adapter_dto = InitOutboundAdapterDto(
         default_fallback_rate=default_fallback_rate,
-        target_keywords=target_keywords
+        target_keywords=selected_keywords
     )
     logger.info("Creating outbound MicrophoneAdapter")
     adapter_outbound: AdapterOutboundPort = MicrophoneAdapter(init_outbound_adapter_dto)

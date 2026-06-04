@@ -12,8 +12,6 @@ from application.dtos.adapter_outbound_dtos import (
     StopMicrophoneStreamResponseDto,
     MicrophoneAvailabilityRequestDto,
     MicrophoneAvailabilityResponseDto,
-    GetStreamRequestDto,
-    GetStreamResponseDto
 )
 from application.ports.adapter_outbound_port import AdapterOutboundPort
 from composition_root.runtime.logger import get_logger
@@ -97,7 +95,7 @@ class SoundDeviceAsyncStream(AsyncIterator[bytes]):
         except Exception as error:
             stream_logger.error("Microphone stream read failed", error=repr(error))
             self._closed = True
-            raise StopAsyncIteration
+            raise RuntimeError("Microphone stream read failed") from error
 
     def _log_telemetry(self, chunk: bytes, overflowed: bool) -> None:
         """Overwrite a single console line with live audio telemetry."""
@@ -158,7 +156,6 @@ class MicrophoneAdapter(AdapterOutboundPort):
     audio_stream: Optional[sd.RawInputStream] = None
 
     loop_stream: Optional[SoundDeviceAsyncStream] = None
-    _mic_stream: Optional[AsyncIterator[bytes]] = None
 
     # --- UPDATED INIT TO ACCEPT THE DTO ---
     def __init__(self, config: InitOutboundAdapterDto):
@@ -205,9 +202,13 @@ class MicrophoneAdapter(AdapterOutboundPort):
             logger.warn("start_stream rejected because stream is already started")
             raise RuntimeError("Microphone stream already started")
         
-        self.mic_sample_rate = request.sample_rate
-        self.mic_channels = request.channels
-        self.mic_chunk_size = request.chunk_size
+        sample_rate = request.sample_rate
+        channels = request.channels
+        chunk_size = request.chunk_size
+
+        self.mic_sample_rate = sample_rate
+        self.mic_channels = channels
+        self.mic_chunk_size = chunk_size
 
         try:
             logger.info("Finding microphone device")
@@ -219,10 +220,10 @@ class MicrophoneAdapter(AdapterOutboundPort):
             # Use our DTO fallback setting if default_samplerate is missing
             default_rate = int(device_info.get('default_samplerate', self.default_fallback_rate))
             
-            if self.mic_sample_rate != default_rate:
+            if sample_rate != default_rate:
                 logger.warn(
                     "Requested sample rate may not be supported",
-                    requested_rate=self.mic_sample_rate,
+                    requested_rate=sample_rate,
                     device_default_rate=default_rate,
                 )
                 
@@ -233,17 +234,17 @@ class MicrophoneAdapter(AdapterOutboundPort):
         try:
             logger.info(
                 "Opening RawInputStream",
-                samplerate=self.mic_sample_rate,
-                blocksize=self.mic_chunk_size,
+                samplerate=sample_rate,
+                blocksize=chunk_size,
                 device=self.device_index,
-                channels=self.mic_channels,
+                channels=channels,
                 dtype="int16",
             )
             self.audio_stream = sd.RawInputStream(
-                samplerate=self.mic_sample_rate,
-                blocksize=self.mic_chunk_size,
+                samplerate=sample_rate,
+                blocksize=chunk_size,
                 device=self.device_index,
-                channels=self.mic_channels,
+                channels=channels,
                 dtype='int16'
             )
             self.audio_stream.start()
@@ -251,46 +252,48 @@ class MicrophoneAdapter(AdapterOutboundPort):
         except Exception as e:
             logger.warn(
                 "Failed to open requested rate; retrying with hardware default",
-                requested_rate=self.mic_sample_rate,
+                requested_rate=sample_rate,
                 default_rate=default_rate,
                 error=repr(e),
             )
-            self.mic_sample_rate = default_rate
+            sample_rate = default_rate
+            self.mic_sample_rate = sample_rate
             try:
                 logger.info(
                     "Retrying RawInputStream with hardware default",
-                    samplerate=self.mic_sample_rate,
-                    blocksize=self.mic_chunk_size,
+                    samplerate=sample_rate,
+                    blocksize=chunk_size,
                     device=self.device_index,
-                    channels=self.mic_channels,
+                    channels=channels,
                     dtype="int16",
                 )
                 self.audio_stream = sd.RawInputStream(
-                    samplerate=self.mic_sample_rate,
-                    blocksize=self.mic_chunk_size,
+                    samplerate=sample_rate,
+                    blocksize=chunk_size,
                     device=self.device_index,
-                    channels=self.mic_channels,
+                    channels=channels,
                     dtype='int16'
                 )
                 self.audio_stream.start()
                 logger.info("RawInputStream retry started", active=self.audio_stream.active)
             except Exception as e2:
-                if self.mic_channels == 1:
+                if channels == 1:
                     logger.warn("Mono failed; retrying with stereo", error=repr(e2))
-                    self.mic_channels = 2
+                    channels = 2
+                    self.mic_channels = channels
                     logger.info(
                         "Retrying RawInputStream in stereo",
-                        samplerate=self.mic_sample_rate,
-                        blocksize=self.mic_chunk_size,
+                        samplerate=sample_rate,
+                        blocksize=chunk_size,
                         device=self.device_index,
-                        channels=self.mic_channels,
+                        channels=channels,
                         dtype="int16",
                     )
                     self.audio_stream = sd.RawInputStream(
-                        samplerate=self.mic_sample_rate,
-                        blocksize=self.mic_chunk_size,
+                        samplerate=sample_rate,
+                        blocksize=chunk_size,
                         device=self.device_index,
-                        channels=self.mic_channels,
+                        channels=channels,
                         dtype='int16'
                     )
                     self.audio_stream.start()
@@ -299,35 +302,37 @@ class MicrophoneAdapter(AdapterOutboundPort):
                     logger.error("RawInputStream retry failed", error=repr(e2))
                     raise e2
 
+        if self.audio_stream is None:
+            raise RuntimeError("Microphone stream could not be opened")
+
         logger.info("Creating async stream wrapper")
         self.loop_stream = SoundDeviceAsyncStream(
             stream=self.audio_stream,
-            chunk_size=self.mic_chunk_size,
-            input_channels=self.mic_channels
+            chunk_size=chunk_size,
+            input_channels=channels
         )
-        self._mic_stream = self.loop_stream
         self.started = True
         logger.info(
             "Runtime state set",
             started=self.started,
             device_index=self.device_index,
-            sample_rate=self.mic_sample_rate,
-            chunk_size=self.mic_chunk_size,
-            channels=self.mic_channels,
+            sample_rate=sample_rate,
+            chunk_size=chunk_size,
+            channels=channels,
         )
         
         logger.info(
             "Microphone successfully started",
             device_index=self.device_index,
-            sample_rate=self.mic_sample_rate,
-            channels=self.mic_channels,
-            channel_mode="Mono" if self.mic_channels == 1 else "Stereo",
-            chunk_size=self.mic_chunk_size,
+            sample_rate=sample_rate,
+            channels=channels,
+            channel_mode="Mono" if channels == 1 else "Stereo",
+            chunk_size=chunk_size,
         )
 
         return StartMicrophoneStreamResponseDto(
             stream=self.loop_stream,
-            sample_rate=self.mic_sample_rate,
+            sample_rate=sample_rate,
         )
 
     async def stop_stream(self, request: StopMicrophoneStreamRequestDto) -> StopMicrophoneStreamResponseDto:
@@ -340,7 +345,6 @@ class MicrophoneAdapter(AdapterOutboundPort):
                 logger.info("Closing async stream wrapper")
                 await self.loop_stream.close()
                 self.loop_stream = None
-                self._mic_stream = None
 
             if self.audio_stream is not None:
                 logger.info("Closing RawInputStream", active=self.audio_stream.active)
@@ -367,23 +371,6 @@ class MicrophoneAdapter(AdapterOutboundPort):
     async def is_available(self, request: MicrophoneAvailabilityRequestDto) -> MicrophoneAvailabilityResponseDto:
         logger.info("is_available requested", started=self.started)
         return MicrophoneAvailabilityResponseDto(is_available=self.started)
-
-    def mic_stream(self, request: GetStreamRequestDto) -> GetStreamResponseDto:
-        logger.info(
-            "mic_stream requested",
-            started=self.started,
-            has_stream=self._mic_stream is not None,
-            sample_rate=self.mic_sample_rate,
-        )
-        if not self.started or self._mic_stream is None:
-            logger.warn("mic_stream rejected because stream is not active")
-            raise RuntimeError("Microphone stream is not active")
-        logger.info("mic_stream returning active stream")
-        return GetStreamResponseDto(
-            stream=self._mic_stream,
-            sample_rate=self.mic_sample_rate if self.mic_sample_rate is not None else self.default_fallback_rate
-        )
-
     def find_microphone_index(self) -> int:
         """Programmatically find the best microphone index"""
         devices = sd.query_devices()

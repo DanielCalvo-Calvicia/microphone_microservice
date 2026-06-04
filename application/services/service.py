@@ -7,21 +7,17 @@ from application.dtos.services_dtos import (
     StopMicrophoneStreamResponseDto as ServiceDto_StopMicrophoneStreamResponseDto,
     MicrophoneAvailabilityRequestDto as ServiceDto_MicrophoneAvailabilityRequestDto,
     MicrophoneAvailabilityResponseDto as ServiceDto_MicrophoneAvailabilityResponseDto,
-    GetStreamRequestDto as ServiceDto_GetStreamRequestDto,
-    GetStreamResponseDto as ServiceDto_GetStreamResponseDto
 )
 
 from application.dtos.mapper.service_to_adapter_outbound import (
     map_service_to_adapter_start_request,
     map_service_to_adapter_stop_request,
     map_service_to_adapter_availability_request,
-    map_service_to_adapter_get_stream_request,
 )
 from application.dtos.mapper.adapter_outbound_to_service import (
     map_adapter_to_service_start_response,
     map_adapter_to_service_stop_response,
     map_adapter_to_service_availability_response,
-    map_adapter_to_service_get_stream_response,
 )
 from composition_root.runtime.logger import get_logger
 
@@ -91,19 +87,4 @@ class MicrophoneService(ServicePort):
         service_response = map_adapter_to_service_availability_response(port_response)
 
         logger.info("is_available completed")
-        return service_response
-
-    def mic_stream(self, request: ServiceDto_GetStreamRequestDto) -> ServiceDto_GetStreamResponseDto:
-        """Get the current microphone stream."""
-        logger.info("mic_stream received")
-        logger.trace("mic_stream mapping service DTO to outbound DTO")
-        port_request_dto = map_service_to_adapter_get_stream_request(request)
-
-        logger.trace("mic_stream calling outbound adapter")
-        port_response = self.controller_port.mic_stream(port_request_dto)
-
-        logger.info("mic_stream outbound response", sample_rate=port_response.sample_rate)
-        service_response = map_adapter_to_service_get_stream_response(port_response)
-
-        logger.info("mic_stream completed")
         return service_response
