@@ -1,5 +1,4 @@
 from abc import ABC, abstractmethod
-from typing import Generator, AsyncIterator
 
 from application.dtos.adapter_outbound_dtos import (
     StartMicrophoneStreamRequestDto,
@@ -8,8 +7,6 @@ from application.dtos.adapter_outbound_dtos import (
     StopMicrophoneStreamResponseDto,
     MicrophoneAvailabilityRequestDto,
     MicrophoneAvailabilityResponseDto,
-    GetStreamRequestDto,
-    GetStreamResponseDto
 )
 
 class AdapterOutboundPort(ABC):
@@ -34,12 +31,6 @@ class AdapterOutboundPort(ABC):
     @abstractmethod
     async def is_available(self, request: MicrophoneAvailabilityRequestDto) -> MicrophoneAvailabilityResponseDto:
         """Check if microphone is available."""
-        pass
-
-
-    @abstractmethod
-    def mic_stream(self, request: GetStreamRequestDto) -> GetStreamResponseDto:
-        """Current microphone stream."""
         pass
 
     @property
