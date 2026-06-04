@@ -1,5 +1,5 @@
-from abc import abstractmethod, ABC
-from typing import Any
+from abc import ABC, abstractmethod
+
 from fastapi import FastAPI
 
 from application.ports.service_port import ServicePort
@@ -11,23 +11,21 @@ from application.dtos.adapter_inbound_dtos import (
     StopMicrophoneStreamResponseDto,
     MicrophoneAvailabilityRequestDto,
     MicrophoneAvailabilityResponseDto,
-    GetStreamRequestDto,
-    GetStreamResponseDto
 )
 
 class AdapterInboundPort(ABC):   
 
     @property
     @abstractmethod
-    def get_app(self) -> Any:
+    def get_app(self) -> FastAPI:
         pass
 
     @abstractmethod
-    def __init__(self, service_port: ServicePort, name: str):
+    def __init__(self, service_port: ServicePort, app: FastAPI):
         pass
     
     @abstractmethod
-    def register_routes(self, app: FastAPI):
+    def register_routes(self, app: FastAPI) -> None:
         pass
 
     @abstractmethod
@@ -43,9 +41,4 @@ class AdapterInboundPort(ABC):
     @abstractmethod
     async def is_available(self, request: MicrophoneAvailabilityRequestDto) -> MicrophoneAvailabilityResponseDto:
         """Check if microphone is available."""
-        pass
-
-    @abstractmethod
-    async def mic_stream(self, request: GetStreamRequestDto) -> GetStreamResponseDto:
-        """Current microphone stream."""
         pass

@@ -36,13 +36,3 @@ class MicrophoneAvailabilityRequestDto:
 @dataclass(slots=True, frozen=True)
 class MicrophoneAvailabilityResponseDto:
     is_available: bool
-
-    
-@dataclass(slots=True, frozen=True)
-class GetStreamRequestDto:
-    pass
-
-@dataclass(slots=True, frozen=True)
-class GetStreamResponseDto:
-    stream: AsyncIterator[bytes]
-    sample_rate: int

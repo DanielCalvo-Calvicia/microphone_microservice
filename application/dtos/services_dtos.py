@@ -1,4 +1,4 @@
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import AsyncIterator
 
 @dataclass(slots=True, frozen=True)
@@ -32,13 +32,3 @@ class MicrophoneAvailabilityRequestDto:
 @dataclass(slots=True, frozen=True)
 class MicrophoneAvailabilityResponseDto:
     is_available: bool
-
-
-@dataclass(slots=True, frozen=True)
-class GetStreamRequestDto:
-    pass
-
-@dataclass(slots=True, frozen=True)
-class GetStreamResponseDto:
-    stream: AsyncIterator[bytes]
-    sample_rate: int

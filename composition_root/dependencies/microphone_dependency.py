@@ -1,7 +1,6 @@
 from dataclasses import dataclass
 
 from fastapi import FastAPI
-import uvicorn
 
 from application.ports.adapter_inbound_port import AdapterInboundPort
 from application.ports.adapter_outbound_port import AdapterOutboundPort
@@ -11,10 +10,14 @@ from application.services.service import MicrophoneService
 
 from infrastructure.inbound.http.fastapi_adapter import FastApiAdapter
 from infrastructure.outbound.windows_sounddevice import MicrophoneAdapter
+from composition_root.runtime.logger import get_logger
 
 from application.dtos.adapter_outbound_dtos import (
     InitOutboundAdapterDto,
 )
+
+
+logger = get_logger("dependency")
 
 @dataclass(slots=True, frozen=True)
 class MicrophoneDependency:
@@ -24,28 +27,30 @@ class MicrophoneDependency:
 
 def generate_microphone_dependency(
     default_fallback_rate: int = 16000,
-    target_keywords: list[str] = [],
+    target_keywords: list[str] | None = None,
     name: str = "Microphone"
-):
-    print(
-        "[dependency] Generating microphone dependency "
-        f"name={name!r}, default_fallback_rate={default_fallback_rate}, "
-        f"target_keywords={target_keywords}"
+) -> MicrophoneDependency:
+    selected_keywords = [] if target_keywords is None else target_keywords
+    logger.info(
+        "Generating microphone dependency",
+        name=name,
+        default_fallback_rate=default_fallback_rate,
+        target_keywords=selected_keywords,
     )
     init_outbound_adapter_dto = InitOutboundAdapterDto(
         default_fallback_rate=default_fallback_rate,
-        target_keywords=target_keywords
+        target_keywords=selected_keywords
     )
-    print("[dependency] Creating outbound MicrophoneAdapter")
+    logger.info("Creating outbound MicrophoneAdapter")
     adapter_outbound: AdapterOutboundPort = MicrophoneAdapter(init_outbound_adapter_dto)
     
-    print("[dependency] Creating MicrophoneService")
+    logger.info("Creating MicrophoneService")
     service: ServicePort = MicrophoneService(
         name=name, 
         controller_port=adapter_outbound
     )
     
-    print("[dependency] Creating FastAPI app")
+    logger.info("Creating FastAPI app")
     app = FastAPI(
         title=name,
         description=f"Adapter exposing {name} via FastAPI",
@@ -55,13 +60,13 @@ def generate_microphone_dependency(
         openapi_url="/openapi.json",
     )
 
-    print("[dependency] Creating inbound FastApiAdapter and registering routes")
+    logger.info("Creating inbound FastApiAdapter and registering routes")
     adapter_inbound: AdapterInboundPort = FastApiAdapter(
         service_port=service,
         app=app
     )
 
-    print("[dependency] Microphone dependency graph ready")
+    logger.info("Microphone dependency graph ready")
     return MicrophoneDependency(        
         adapter_inbound=adapter_inbound,
         adapter_outbound=adapter_outbound,
