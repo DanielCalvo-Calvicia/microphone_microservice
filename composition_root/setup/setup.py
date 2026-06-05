@@ -26,11 +26,11 @@ async def setup() -> None:
     logger.info("Retrieving FastAPI app from inbound adapter")
     app = container.microphone_dependency.adapter_inbound.get_app
     
-    logger.info("Server bind configured", host="127.0.0.1", port=8000)
+    logger.info("Server bind configured", host="0.0.0.0", port=8000)
 
     # We configure and create a uvicorn Server instance
     logger.info("Creating Uvicorn config and server")
-    config = uvicorn.Config(app, host="127.0.0.1", port=8000)
+    config = uvicorn.Config(app, host="0.0.0.0", port=8000)
     server = uvicorn.Server(config)
 
     logger.info("Application started. Waiting for shutdown signal (Ctrl+C)...")
