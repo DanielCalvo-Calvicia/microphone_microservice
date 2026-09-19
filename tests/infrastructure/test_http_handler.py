@@ -24,6 +24,9 @@ class FiniteStream(AudioStreamPort):
 
         return gen()
 
+    def on_terminated(self, callback) -> None:
+        pass
+
     async def close(self) -> None:
         pass
 

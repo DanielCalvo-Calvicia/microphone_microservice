@@ -11,3 +11,7 @@ class StreamCloseFailed(ApplicationError, RuntimeError):
 
     Also a RuntimeError so callers written against the previous behaviour keep working.
     """
+
+
+class StreamReadFailed(ApplicationError):
+    """The device failed while a stream was being read; the stream is no longer usable."""

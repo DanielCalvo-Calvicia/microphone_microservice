@@ -54,7 +54,8 @@ application/
 infrastructure/
   config/                         ServerConfig, MicrophoneConfig (env -> frozen dataclasses)
   inbound/http/                   http_handler.py (MicrophoneHandler), http_envelope.py, http_error_mapper.py
-  outbound/sounddevice_capture/   sounddevice_audio_capture.py, sounddevice_audio_stream.py, sounddevice_error_mapper.py
+  outbound/sounddevice_capture/   audio_driver.py (protocol), sounddevice_driver.py, sounddevice_device_selector.py,
+                                  sounddevice_audio_capture.py, sounddevice_audio_stream.py, sounddevice_error_mapper.py
 composition_root/
   dependencies/microphone_dependencies.py    new_audio_capture / new_microphone_service / new_http_app
   containers/http_container.py               HttpContainer, new_http_container
@@ -74,7 +75,7 @@ tests/  domain/ application/ infrastructure/ composition_root/ architecture/   (
 * Every failure returns HTTP 500 with the same JSON envelope (`action/status/status_code/message/timestamp/data`).
 * `channels > 1` requests are still delivered as mono.
 * `/available` still means "a stream is active"; `/start` still returns JSON, audio is read from `/stream`.
-* A client disconnecting from `/stream` still ends the shared stream until stop + start.
+* A client disconnecting from `/stream` still ends the shared stream (see "Deliberate changes": the service now goes idle by itself).
 
 ## Deliberate changes
 
@@ -83,12 +84,13 @@ tests/  domain/ application/ infrastructure/ composition_root/ architecture/   (
 * A retry with a format identical to the one that just failed is skipped.
 * A raw stream that fails in `start()` is now closed (previously leaked). Shutdown cleanup runs in `finally`.
 * A failed start no longer leaves stale rate/channel/chunk state.
+* A stream that dies on its own (device read failure, or the `/stream` consumer disconnecting) releases the device and returns the service to idle, so `/start` works again without `/stop`. A read failure surfaces as `StreamReadFailed` instead of a silent end of stream.
+* The sounddevice adapter is split behind an `AudioDriver` protocol (`sounddevice_driver.py` is the only module importing `sounddevice`) and a `DeviceSelector`; open/read/close run in threads.
 
 ## Known remaining debt
 
 1. Domain errors are not mapped to 4xx (`InvalidAudioFormat` → 422, `CaptureAlreadyActive` → 409); see `http_error_mapper.py`, decision D4.
-2. Disconnected `/stream` consumer leaves the domain "capturing" while the shared stream is dead.
-3. Requested `channels > 1` is silently mixed to mono and the response does not say so.
-4. `MICROPHONE_API_KEY` and `APP_ENV` are defined in `.env*` but never read; there is no authentication (decision D6).
-5. `sounddevice` open/start/stop calls block the event loop (as before); `asyncio.to_thread` would fix it but needs hardware to validate.
-6. The sounddevice adapter is tested against a fake module; run `python tests/simple.py` on the Windows machine with a real microphone to confirm.
+2. Requested `channels > 1` is silently mixed to mono and the response does not say so.
+3. `MICROPHONE_API_KEY` and `APP_ENV` are defined in `.env*` but never read; there is no authentication (decision D6).
+4. Blocking `sounddevice` calls now run via `asyncio.to_thread`, but this is unvalidated on real hardware.
+5. The sounddevice adapter is tested against a fake `AudioDriver`; run `python tests/simple.py` on the Windows machine with a real microphone to confirm.

@@ -8,12 +8,16 @@ from infrastructure.inbound.http.http_handler import MicrophoneHandler
 from infrastructure.outbound.sounddevice_capture.sounddevice_audio_capture import (
     SoundDeviceAudioCapture,
 )
+from infrastructure.outbound.sounddevice_capture.sounddevice_device_selector import DeviceSelector
+from infrastructure.outbound.sounddevice_capture.sounddevice_driver import SoundDeviceDriver
 
 
 def new_audio_capture(cfg: MicrophoneConfig) -> AudioCapturePort:
+    driver = SoundDeviceDriver()
     return SoundDeviceAudioCapture(
+        driver=driver,
+        selector=DeviceSelector(driver, cfg.target_keywords),
         default_fallback_rate=cfg.fallback_sample_rate,
-        target_keywords=cfg.target_keywords,
         show_meter=cfg.show_meter,
     )
 

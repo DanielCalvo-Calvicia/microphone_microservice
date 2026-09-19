@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Callable
 
 
 class AudioStreamPort(ABC):
@@ -12,7 +12,18 @@ class AudioStreamPort(ABC):
 
     @abstractmethod
     def __aiter__(self) -> AsyncIterator[bytes]:
-        """Iterate over PCM chunks until the stream is closed."""
+        """Iterate over PCM chunks until close() is called.
+
+        A device failure is not a clean end: it raises StreamReadFailed.
+        """
+
+    @abstractmethod
+    def on_terminated(self, callback: Callable[[], None]) -> None:
+        """Register a callback for when the stream ends on its own.
+
+        Fires once, after the device has been released, when a read fails or the consumer
+        goes away. It does not fire for an explicit close().
+        """
 
     @abstractmethod
     async def close(self) -> None:

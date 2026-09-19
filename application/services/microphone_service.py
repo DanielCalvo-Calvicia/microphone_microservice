@@ -36,6 +36,7 @@ class MicrophoneService(MicrophoneStreamingPort):
             stream = await self._capture.open_stream(requested)
             self._microphone.start(requested.with_sample_rate(stream.sample_rate))
             self._stream = stream
+            stream.on_terminated(lambda: self._handle_stream_terminated(stream))
         logger.info("Microphone stream started sample_rate=%s", stream.sample_rate)
         return StreamOutboundDTO(sample_rate=stream.sample_rate, stream=stream)
 
@@ -55,3 +56,11 @@ class MicrophoneService(MicrophoneStreamingPort):
         if self._stream is None or not self._microphone.is_capturing:
             raise CaptureNotActive("Microphone stream is not active")
         return StreamOutboundDTO(sample_rate=self._stream.sample_rate, stream=self._stream)
+
+    def _handle_stream_terminated(self, stream: AudioStreamPort) -> None:
+        """The stream died on its own (device failure or consumer gone); go back to idle."""
+        if self._stream is not stream:
+            return
+        logger.warning("Microphone stream terminated unexpectedly; capture is idle again")
+        self._stream = None
+        self._microphone.stop()

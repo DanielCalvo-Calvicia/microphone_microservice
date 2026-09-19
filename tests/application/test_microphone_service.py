@@ -30,6 +30,12 @@ class FakeStream(AudioStreamPort):
 
         return gen()
 
+    def on_terminated(self, callback) -> None:
+        self.callback = callback
+
+    def terminate(self) -> None:
+        self.callback()
+
     async def close(self) -> None:
         self.close_calls += 1
         if self._fail_on_close:
@@ -184,5 +190,37 @@ def test_can_restart_after_stop():
         await service.stop_stream()
         await service.start_stream(StartStreamInboundDTO())
         assert len(port.opened) == 2
+
+    run(scenario())
+
+
+def test_stream_terminating_on_its_own_returns_service_to_idle_and_restartable():
+    async def scenario():
+        port = FakeCapture()
+        service = MicrophoneService(port)
+        await service.start_stream(StartStreamInboundDTO())
+
+        port.streams[0].terminate()
+
+        assert not service.is_available()
+        with pytest.raises(CaptureNotActive):
+            service.current_stream()
+        await service.start_stream(StartStreamInboundDTO())
+        assert len(port.opened) == 2
+
+    run(scenario())
+
+
+def test_stale_termination_of_a_replaced_stream_is_ignored():
+    async def scenario():
+        port = FakeCapture()
+        service = MicrophoneService(port)
+        await service.start_stream(StartStreamInboundDTO())
+        await service.stop_stream()
+        await service.start_stream(StartStreamInboundDTO())
+
+        port.streams[0].terminate()  # the first stream reports late
+
+        assert service.is_available()
 
     run(scenario())
