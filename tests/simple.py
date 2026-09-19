@@ -23,7 +23,9 @@ sys.path.insert(0, str(repo_root))
 import httpx
 import uvicorn
 
-from composition_root.containers.container import BuildContainer
+from composition_root.containers.http_container import new_http_container
+from infrastructure.config.microphone_config import MicrophoneConfig
+from infrastructure.config.server_config import ServerConfig
 
 # ── Configuration ───────────────────────────────────────
 HOST = "127.0.0.1"
@@ -41,8 +43,11 @@ async def start_server() -> tuple[uvicorn.Server, asyncio.Task]:
     """Boot the microservice exactly like main.py does and return
     the server instance + its background task."""
 
-    container = BuildContainer(name="Test Microservice")
-    app = container.microphone_dependency.app
+    container = new_http_container(
+        ServerConfig.from_env({"SERVICE_NAME": "Test Microservice"}),
+        MicrophoneConfig.from_env(),
+    )
+    app = container.app
 
     config = uvicorn.Config(app, host=HOST, port=PORT, log_level="warning")
     server = uvicorn.Server(config)
