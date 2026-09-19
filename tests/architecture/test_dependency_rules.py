@@ -12,7 +12,7 @@ from pathlib import Path
 import pytest
 
 ROOT = Path(__file__).resolve().parents[2]
-OWN_PACKAGES = {"domain", "application", "infrastructure", "composition_root"}
+OWN_PACKAGES = {"domain", "application", "infrastructure", "composition_root", "main_flow"}
 FRAMEWORKS = {"fastapi", "starlette", "pydantic", "uvicorn", "sounddevice", "numpy", "httpx"}
 
 
@@ -80,4 +80,39 @@ def test_outbound_adapters_do_not_touch_inbound_adapters_or_the_composition_root
 @pytest.mark.parametrize("package", ["domain", "application", "infrastructure"])
 def test_nothing_below_the_composition_root_imports_it(package):
     problems = violations(python_files(package), {"composition_root"}, allow_third_party=True)
+    assert not problems, "\n".join(problems)
+
+
+def test_main_flow_does_not_import_adapters():
+    problems = violations(
+        python_files("main_flow"),
+        {"infrastructure.inbound", "infrastructure.outbound"},
+        allow_third_party=True,
+    )
+    assert not problems, "\n".join(problems)
+
+
+@pytest.mark.parametrize("package", ["domain", "application", "composition_root", "main_flow"])
+def test_no_print_calls_outside_infrastructure(package):
+    problems = []
+    for path in python_files(package):
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        for node in ast.walk(tree):
+            if (
+                isinstance(node, ast.Call)
+                and isinstance(node.func, ast.Name)
+                and node.func.id == "print"
+            ):
+                problems.append(f"{path.relative_to(ROOT)}:{node.lineno} calls print()")
+    assert not problems, "\n".join(problems)
+
+
+def test_no_utils_common_or_helpers_modules():
+    banned = {"utils", "common", "helpers"}
+    problems = []
+    for package in ("domain", "application", "infrastructure", "composition_root", "main_flow"):
+        for path in python_files(package):
+            parts = {p.removesuffix(".py") for p in path.relative_to(ROOT).parts}
+            if parts & banned:
+                problems.append(str(path.relative_to(ROOT)))
     assert not problems, "\n".join(problems)

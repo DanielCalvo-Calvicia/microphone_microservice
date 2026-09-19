@@ -1,6 +1,6 @@
 # Architecture
 
-This document describes the architecture **after** the Clean Architecture refactor and records what was wrong before. It supersedes the structure described in `README.md` and the mapper/DTO conventions in `docs/general.md` where they disagree.
+This document describes the architecture **after** the Clean Architecture refactor and records what was wrong before. It supersedes the legacy docs in `docs/old/`.
 
 ## Layers and dependency rule
 
@@ -12,7 +12,7 @@ composition_root  ──▶  infrastructure  ──▶  application  ──▶  
 Source-code dependencies point inward only. Runtime calls go outward (HTTP → service → hardware) through ports owned by `application`.
 
 ```
-HTTP route ──▶ ServicePort ◀── MicrophoneService ──▶ MicrophonePort ◀── SoundDeviceMicrophone ──▶ sounddevice
+HTTP handler ──▶ MicrophoneStreamingPort ◀── MicrophoneService ──▶ AudioCapturePort ◀── SoundDeviceAudioCapture ──▶ sounddevice
 (inbound)      (driving port)   (application)         (driven port)       (outbound)
                                      │
                                      ▼
@@ -28,10 +28,15 @@ HTTP route ──▶ ServicePort ◀── MicrophoneService ──▶ Microphon
 | `infrastructure/inbound` | application, domain, frameworks | `infrastructure.outbound`, `composition_root` |
 | `infrastructure/outbound` | application, domain, frameworks | `infrastructure.inbound`, `composition_root` |
 | `composition_root` | everything | — |
+| `main_flow` | `composition_root`, `infrastructure.config` | `infrastructure.inbound`, `infrastructure.outbound` |
 
 ## Layout
 
 ```
+main.py                           calls main_flow.http.run_http()
+main_flow/
+  http.py                         config -> container -> uvicorn -> shutdown cleanup
+  logging_setup.py                configure_logging (TRACE/WARN aliases)
 domain/
   errors.py                       DomainError, InvalidAudioFormat, CaptureAlreadyActive, CaptureNotActive
   value_objects/audio_format.py   AudioFormat(sample_rate, channels, chunk_size) — all fields > 0
@@ -39,18 +44,21 @@ domain/
   operations/pcm.py               downmix_to_mono(pcm, channels)
   operations/format_negotiation.py fallback_formats(requested, device_default_rate)
 application/
-  dtos/stream_dtos.py             StartStreamCommand
-  ports/service_port.py           ServicePort      (driving port used by inbound adapters)
-  ports/microphone_port.py        MicrophonePort, AudioStream   (driven port)
+  errors.py                       ApplicationError, MicrophoneUnavailable, StreamCloseFailed
+  dtos/start_stream_inbound.py    StartStreamInboundDTO
+  dtos/stream_outbound.py         StreamOutboundDTO
+  ports/inbound/microphone_streaming_port.py   MicrophoneStreamingPort (driving)
+  ports/outbound/audio_capture_port.py         AudioCapturePort (driven)
+  ports/outbound/audio_stream_port.py          AudioStreamPort (driven)
   services/microphone_service.py  MicrophoneService — orchestration + lock, no rules of its own
 infrastructure/
-  inbound/http/routes/microphone_routes.py   build_microphone_router(service) + StartStreamBody
-  outbound/sounddevice_microphone.py         SoundDeviceMicrophone, SoundDeviceAudioStream
+  config/                         ServerConfig, MicrophoneConfig (env -> frozen dataclasses)
+  inbound/http/                   http_handler.py (MicrophoneHandler), http_envelope.py, http_error_mapper.py
+  outbound/sounddevice_capture/   sounddevice_audio_capture.py, sounddevice_audio_stream.py, sounddevice_error_mapper.py
 composition_root/
-  dependencies/microphone_dependency.py      picks the adapter, builds service, FastAPI app, router
-  containers/container.py                    Container / BuildContainer
-  setup/setup.py                             logging config (LOG_LEVEL), uvicorn lifecycle, cleanup
-tests/  domain/ application/ infrastructure/ architecture/   (pytest)   +   simple.py (e2e, needs a real mic)
+  dependencies/microphone_dependencies.py    new_audio_capture / new_microphone_service / new_http_app
+  containers/http_container.py               HttpContainer, new_http_container
+tests/  domain/ application/ infrastructure/ composition_root/ architecture/   (pytest)   +   simple.py (e2e, needs a real mic)
 ```
 
 ## Domain model (all of it is evidenced by pre-refactor code)
@@ -78,12 +86,9 @@ tests/  domain/ application/ infrastructure/ architecture/   (pytest)   +   simp
 
 ## Known remaining debt
 
-1. Domain errors are not mapped to 4xx (`InvalidAudioFormat` → 422, `CaptureAlreadyActive` → 409 would be natural).
+1. Domain errors are not mapped to 4xx (`InvalidAudioFormat` → 422, `CaptureAlreadyActive` → 409); see `http_error_mapper.py`, decision D4.
 2. Disconnected `/stream` consumer leaves the domain "capturing" while the shared stream is dead.
 3. Requested `channels > 1` is silently mixed to mono and the response does not say so.
-4. `MICROPHONE_API_KEY` and `APP_ENV` are defined in `.env*` but never read; there is no authentication.
-5. `README.md` and `docs/general.md` still describe the old structure (`windows_sounddevice`, mappers, `FastApiAdapter`, `get_app`).
-6. `soundfile` in `requirements.windows.txt` is unused.
-7. `sounddevice` open/start/stop calls block the event loop (as before); `asyncio.to_thread` would fix it but needs hardware to validate.
-8. The sounddevice adapter is tested against a fake module; run `python tests/simple.py` on the Windows machine with a real microphone to confirm.
-9. Host/port/fallback rate/meter are constants in the composition root, not configuration.
+4. `MICROPHONE_API_KEY` and `APP_ENV` are defined in `.env*` but never read; there is no authentication (decision D6).
+5. `sounddevice` open/start/stop calls block the event loop (as before); `asyncio.to_thread` would fix it but needs hardware to validate.
+6. The sounddevice adapter is tested against a fake module; run `python tests/simple.py` on the Windows machine with a real microphone to confirm.
