@@ -35,10 +35,34 @@ Configuration is read from the environment; see `.env.example`.
 Responses use the envelope `action / status / status_code / message / timestamp / data`.
 Every failure currently returns HTTP 500.
 
-## Tests
+Notes:
+
+- The negotiated `sample_rate` can differ from the requested one; the device's native rate is tried as a fallback.
+- Audio is always delivered as mono, even when `channels > 1` is requested.
+- If the device fails or the `/stream` client disconnects, the stream ends, the device is released and
+  the service returns to idle, so `/start` works again without calling `/stop`.
+
+## Project layout
+
+```text
+main.py            entry point (calls main_flow)
+main_flow/         startup, logging and graceful shutdown
+composition_root/  the only place concrete adapters are wired together
+infrastructure/    config, HTTP (inbound) and sounddevice (outbound) adapters
+application/       use-case service, ports, DTOs, application errors
+domain/            entities, value objects, pure audio operations
+```
+
+Dependencies point inward only (`infrastructure → application → domain`); `tests/architecture/`
+enforces this.
+
+## Development
 
 ```bash
 pytest                    # unit + architecture tests (no hardware needed)
+mypy .
+ruff check .
+black --check .
 python tests/simple.py    # end-to-end, needs a real microphone
 ```
 
