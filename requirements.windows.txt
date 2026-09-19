@@ -12,3 +12,4 @@ numpy
 
 #TESTING
 pytest
+httpx  # required by tests (TestClient + e2e script)

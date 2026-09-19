@@ -1,55 +1,47 @@
-import asyncio
-import signal
+import logging
+import os
+
 import uvicorn
 
-from composition_root.containers.container import BuildContainer
-from infrastructure.outbound.windows_sounddevice import MicrophoneAdapter
-from application.dtos.adapter_outbound_dtos import StopMicrophoneStreamRequestDto
+from composition_root.containers.container import Container, BuildContainer
 
 NAME: str = "Microphone Microservice"
+HOST: str = "127.0.0.1"
+PORT: int = 8000
 
-async def setup() -> None:    
+logger = logging.getLogger(__name__)
 
-    print("\n" + "="*60)
-    print(f" {NAME} - Starting Server")
-    print("="*60)
 
-    print("[setup] Building application container")
+def configure_logging() -> None:
+    """Honor LOG_LEVEL (defaults to INFO)."""
+    level = getattr(logging, os.getenv("LOG_LEVEL", "INFO").upper(), logging.INFO)
+    if not isinstance(level, int):
+        level = logging.INFO
+    logging.basicConfig(
+        level=level,
+        format="%(asctime)s %(levelname)-7s %(name)s: %(message)s",
+    )
+
+
+async def setup() -> None:
+    configure_logging()
+    logger.info("%s - starting server on %s:%s", NAME, HOST, PORT)
+
     container = BuildContainer(name=NAME)
-    
-    # We retrieve the FastAPI app instance from the inbound adapter
-    print("[setup] Retrieving FastAPI app from inbound adapter")
-    app = container.microphone_dependency.adapter_inbound.get_app
-    
-    print(f"Host: 127.0.0.1")
-    print(f"Port: 8000")
-
-    # We configure and create a uvicorn Server instance
-    print("[setup] Creating Uvicorn config and server")
-    config = uvicorn.Config(app, host="127.0.0.1", port=8000)
+    config = uvicorn.Config(container.microphone_dependency.app, host=HOST, port=PORT)
     server = uvicorn.Server(config)
 
-    print("Application started. Waiting for shutdown signal (Ctrl+C)...")
-    
-    # Uvicorn's serve() method is an asynchronous blocking call that automatically 
-    # listens for termination signals (like Ctrl+C) and shuts down gracefully.
-    print("[setup] Entering Uvicorn serve loop")
-    await server.serve()
-    
-    # Once Uvicorn has finished shutting down, we execute our custom cleanup logic.
-    print("[setup] Uvicorn stopped; starting cleanup")
-    await _cleanup(container)
-    
+    try:
+        # serve() blocks and shuts down gracefully on Ctrl+C / termination signals.
+        await server.serve()
+    finally:
+        await _cleanup(container)
 
 
-async def _cleanup(container) -> None:
-    print("[cleanup] Inspecting outbound adapter state")
-    adapter = container.microphone_dependency.adapter_outbound
-
-    if isinstance(adapter, MicrophoneAdapter):
-        print(f"[cleanup] MicrophoneAdapter started={adapter.started}")
-        if adapter.started:
-            print("Stopping microphone stream before exit...")
-            await adapter.stop_stream(StopMicrophoneStreamRequestDto())
-
-    print("Cleanup finished.")
+async def _cleanup(container: Container) -> None:
+    logger.info("Server stopped; releasing microphone")
+    try:
+        await container.microphone_dependency.service.stop_stream()
+    except Exception:
+        logger.exception("Failed to stop microphone stream during cleanup")
+    logger.info("Cleanup finished")

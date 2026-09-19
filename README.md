@@ -1,5 +1,7 @@
 # Microphone Microservice
 
+> **Architecture update:** the code was refactored to a strict Clean/Hexagonal layout (`domain/` added; per-boundary DTO copies and mappers removed; `FastApiAdapter` replaced by an HTTP router; `windows_sounddevice.py` -> `sounddevice_microphone.py`). See [`docs/architecture.md`](docs/architecture.md) for the current structure. File names, class names and flows below that mention the old layout are outdated.
+
 Technical knowledge-transfer README for the current `microphone_microservice` codebase.
 
 This project is a Windows-oriented Python FastAPI microservice that exposes a local microphone as a raw PCM byte stream over HTTP. The implementation uses a hexagonal, ports-and-adapters structure: HTTP is the inbound adapter, the application service is the framework-neutral core, and `sounddevice`/PortAudio is the outbound hardware adapter.

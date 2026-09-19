@@ -42,7 +42,7 @@ async def start_server() -> tuple[uvicorn.Server, asyncio.Task]:
     the server instance + its background task."""
 
     container = BuildContainer(name="Test Microservice")
-    app = container.microphone_dependency.adapter_inbound.get_app
+    app = container.microphone_dependency.app
 
     config = uvicorn.Config(app, host=HOST, port=PORT, log_level="warning")
     server = uvicorn.Server(config)

@@ -1,42 +1,24 @@
-from abc import ABC, abstractmethod
-from typing import Generator, AsyncIterator
+"""Driving (inbound) port: the use cases that inbound adapters may invoke."""
 
-from application.dtos.services_dtos import (
-    StartMicrophoneStreamRequestDto,
-    StartMicrophoneStreamResponseDto,
-    StopMicrophoneStreamRequestDto,
-    StopMicrophoneStreamResponseDto,
-    MicrophoneAvailabilityRequestDto,
-    MicrophoneAvailabilityResponseDto,
-    GetStreamRequestDto,
-    GetStreamResponseDto
-)
+from abc import ABC, abstractmethod
+
+from application.dtos.stream_dtos import StartStreamCommand
+from application.ports.microphone_port import AudioStream
+
 
 class ServicePort(ABC):
     @abstractmethod
-    async def start_stream(
-        self,
-        request: StartMicrophoneStreamRequestDto,
-    ) -> StartMicrophoneStreamResponseDto:
-        """
-        Start continuous microphone streaming.
-
-        Returns:
-            StartMicrophoneStreamResponseDto containing the audio stream.
-        """
-        pass
+    async def start_stream(self, command: StartStreamCommand) -> AudioStream:
+        """Start continuous microphone streaming and return the live stream."""
 
     @abstractmethod
-    async def stop_stream(self, request: StopMicrophoneStreamRequestDto) -> StopMicrophoneStreamResponseDto:
-        """Stop active microphone stream."""
-        pass
+    async def stop_stream(self) -> None:
+        """Stop the active stream. Does nothing if none is active."""
 
     @abstractmethod
-    async def is_available(self, request: MicrophoneAvailabilityRequestDto) -> MicrophoneAvailabilityResponseDto:
-        """Check if microphone is available."""
-        pass
+    def is_available(self) -> bool:
+        """True while a stream is active."""
 
     @abstractmethod
-    def mic_stream(self, request: GetStreamRequestDto) -> GetStreamResponseDto:
-        """Current microphone stream."""
-        pass
+    def current_stream(self) -> AudioStream:
+        """The active stream. Raises if none is active."""

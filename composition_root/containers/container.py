@@ -1,22 +1,23 @@
+import logging
 from dataclasses import dataclass
 
 from composition_root.dependencies.microphone_dependency import (
+    MicrophoneDependency,
     generate_microphone_dependency,
-    MicrophoneDependency
 )
+
+logger = logging.getLogger(__name__)
+
 
 @dataclass(slots=True, frozen=True)
 class Container:
     microphone_dependency: MicrophoneDependency
 
-def BuildContainer(name: str):
-    print(f"[container] Building dependency container for {name!r}")
+
+def BuildContainer(name: str) -> Container:
+    logger.info("Building dependency container for %r", name)
     microphone_dependency = generate_microphone_dependency(
         default_fallback_rate=16000,
-        target_keywords=[]
+        target_keywords=(),
     )
-
-    print("[container] Dependency container built")
-    return Container(
-        microphone_dependency=microphone_dependency
-    )
+    return Container(microphone_dependency=microphone_dependency)
