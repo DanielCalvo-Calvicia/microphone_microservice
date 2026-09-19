@@ -33,7 +33,9 @@ def python_files(package: str, subpackage: str = "") -> list[Path]:
     return sorted(p for p in base.rglob("*.py") if "__pycache__" not in p.parts)
 
 
-def violations(files: list[Path], forbidden_prefixes: set[str], allow_third_party: bool) -> list[str]:
+def violations(
+    files: list[Path], forbidden_prefixes: set[str], allow_third_party: bool
+) -> list[str]:
     problems = []
     for path in files:
         for module in imported_modules(path):
@@ -48,7 +50,9 @@ def violations(files: list[Path], forbidden_prefixes: set[str], allow_third_part
 def test_domain_depends_on_nothing_but_the_standard_library():
     files = python_files("domain")
     assert files, "domain package not found"
-    problems = violations(files, {"application", "infrastructure", "composition_root"}, allow_third_party=False)
+    problems = violations(
+        files, {"application", "infrastructure", "composition_root"}, allow_third_party=False
+    )
     assert not problems, "\n".join(problems)
 
 
@@ -66,14 +70,18 @@ def test_application_does_not_depend_on_infrastructure_or_frameworks():
 def test_inbound_adapters_do_not_touch_outbound_adapters_or_the_composition_root():
     files = python_files("infrastructure", "inbound")
     assert files
-    problems = violations(files, {"infrastructure.outbound", "composition_root"}, allow_third_party=True)
+    problems = violations(
+        files, {"infrastructure.outbound", "composition_root"}, allow_third_party=True
+    )
     assert not problems, "\n".join(problems)
 
 
 def test_outbound_adapters_do_not_touch_inbound_adapters_or_the_composition_root():
     files = python_files("infrastructure", "outbound")
     assert files
-    problems = violations(files, {"infrastructure.inbound", "composition_root"}, allow_third_party=True)
+    problems = violations(
+        files, {"infrastructure.inbound", "composition_root"}, allow_third_party=True
+    )
     assert not problems, "\n".join(problems)
 
 

@@ -10,7 +10,9 @@ from infrastructure.inbound.http.http_error_mapper import map_error
 logger = logging.getLogger(__name__)
 
 
-def success(action: str, message: str, data: Any = None) -> JSONResponse:  # noqa: ANN401 - JSON payload is arbitrary
+def success(
+    action: str, message: str, data: Any = None
+) -> JSONResponse:  # noqa: ANN401 - JSON payload is arbitrary
     return JSONResponse(
         status_code=status.HTTP_200_OK,
         content={

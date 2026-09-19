@@ -5,13 +5,21 @@ from infrastructure.config.server_config import ServerConfig
 def test_server_config_defaults():
     cfg = ServerConfig.from_env({})
     assert (cfg.service_name, cfg.host, cfg.port, cfg.log_level) == (
-        "Microphone Microservice", "127.0.0.1", 8000, "INFO",
+        "Microphone Microservice",
+        "127.0.0.1",
+        8000,
+        "INFO",
     )
 
 
 def test_server_config_overrides():
     cfg = ServerConfig.from_env(
-        {"SERVICE_NAME": "X", "SERVICE_HOST": "0.0.0.0", "SERVICE_PORT": "9000", "LOG_LEVEL": "DEBUG"}
+        {
+            "SERVICE_NAME": "X",
+            "SERVICE_HOST": "0.0.0.0",
+            "SERVICE_PORT": "9000",
+            "LOG_LEVEL": "DEBUG",
+        }
     )
     assert (cfg.service_name, cfg.host, cfg.port, cfg.log_level) == ("X", "0.0.0.0", 9000, "DEBUG")
 

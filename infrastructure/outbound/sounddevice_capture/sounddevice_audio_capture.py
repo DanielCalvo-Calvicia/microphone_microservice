@@ -33,7 +33,8 @@ class SoundDeviceAudioCapture(AudioCapturePort):
         self._show_meter = show_meter
         logger.info(
             "SoundDeviceAudioCapture initialized default_fallback_rate=%s target_keywords=%s",
-            default_fallback_rate, list(self._target_keywords),
+            default_fallback_rate,
+            list(self._target_keywords),
         )
 
     async def open_stream(self, audio_format: AudioFormat) -> AudioStreamPort:
@@ -49,7 +50,8 @@ class SoundDeviceAudioCapture(AudioCapturePort):
         if audio_format.sample_rate != default_rate:
             logger.warning(
                 "Requested rate %sHz may not be supported (device default: %sHz)",
-                audio_format.sample_rate, default_rate,
+                audio_format.sample_rate,
+                default_rate,
             )
 
         last_error: Exception | None = None
@@ -108,4 +110,4 @@ class SoundDeviceAudioCapture(AudioCapturePort):
             raise RuntimeError("No default input device configured in OS")
         sd.query_devices(default_input)  # raises if the default index is invalid
         logger.info("No keyword match; using OS default input index=%s", default_input)
-        return default_input
+        return int(default_input)

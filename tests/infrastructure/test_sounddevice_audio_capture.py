@@ -5,6 +5,7 @@ import importlib
 import struct
 import sys
 import types
+from typing import Any
 
 import pytest
 
@@ -18,13 +19,15 @@ STREAM_MODULE = "infrastructure.outbound.sounddevice_capture.sounddevice_audio_s
 class FakeSoundDevice(types.ModuleType):
     def __init__(self, devices=None, default_input=0, unsupported=()):
         super().__init__("sounddevice")
-        self.devices = devices if devices is not None else [
-            {"name": "Built-in Mic", "max_input_channels": 2, "default_samplerate": 48000.0}
-        ]
+        self.devices = (
+            devices
+            if devices is not None
+            else [{"name": "Built-in Mic", "max_input_channels": 2, "default_samplerate": 48000.0}]
+        )
         self.default = types.SimpleNamespace(device=(default_input, None))
         self.unsupported = set(unsupported)  # {(rate, channels)} the "hardware" rejects
         self.opened: list[tuple[int, int]] = []
-        self.streams: list["FakeRaw"] = []
+        self.streams: list[Any] = []
         outer = self
 
         class RawInputStream:
@@ -68,6 +71,7 @@ def load(monkeypatch):
         monkeypatch.delitem(sys.modules, STREAM_MODULE, raising=False)
         monkeypatch.delitem(sys.modules, MODULE, raising=False)
         return importlib.import_module(MODULE)
+
     return _load
 
 
@@ -144,7 +148,10 @@ def test_keyword_match_selects_device(load):
 def test_os_default_input_used_without_keyword_match(load):
     fake = FakeSoundDevice()
     mod = load(fake)
-    open_stream(mod.SoundDeviceAudioCapture(target_keywords=["nope"], show_meter=False), AudioFormat(48000, 2, 8))
+    open_stream(
+        mod.SoundDeviceAudioCapture(target_keywords=["nope"], show_meter=False),
+        AudioFormat(48000, 2, 8),
+    )
     assert fake.streams[0].device == 0
 
 

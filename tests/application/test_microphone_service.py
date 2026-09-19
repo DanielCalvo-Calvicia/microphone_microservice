@@ -1,5 +1,5 @@
 import asyncio
-from typing import AsyncIterator, Optional
+from collections.abc import AsyncIterator
 
 import pytest
 
@@ -27,6 +27,7 @@ class FakeStream(AudioStreamPort):
         async def gen():
             for _ in range(self._chunks):
                 yield b"\x01\x00" * 4
+
         return gen()
 
     async def close(self) -> None:
@@ -36,7 +37,7 @@ class FakeStream(AudioStreamPort):
 
 
 class FakeCapture(AudioCapturePort):
-    def __init__(self, negotiated_rate: Optional[int] = None, error: Optional[Exception] = None):
+    def __init__(self, negotiated_rate: int | None = None, error: Exception | None = None):
         self.negotiated_rate = negotiated_rate
         self.error = error
         self.opened: list[AudioFormat] = []

@@ -17,5 +17,5 @@ def downmix_to_mono(pcm: bytes, channels: int) -> bytes:
 
     samples = array("h")
     samples.frombytes(pcm)
-    frames = zip(*[iter(samples)] * channels)
+    frames = zip(*[iter(samples)] * channels, strict=True)
     return array("h", (int(sum(frame) / channels) for frame in frames)).tobytes()

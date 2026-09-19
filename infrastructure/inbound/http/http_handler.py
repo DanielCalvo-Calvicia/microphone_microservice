@@ -61,9 +61,7 @@ class MicrophoneHandler:
         try:
             available = self._port.is_available()
         except Exception as error:
-            return failure(
-                "check_availability", "Failed to check microphone availability", error
-            )
+            return failure("check_availability", "Failed to check microphone availability", error)
         return success(
             "check_availability", "Microphone availability checked successfully", available
         )

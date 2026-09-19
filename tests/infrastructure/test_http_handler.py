@@ -1,5 +1,3 @@
-import asyncio
-
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
@@ -23,6 +21,7 @@ class FiniteStream(AudioStreamPort):
         async def gen():
             for _ in range(3):
                 yield b"abcd"
+
         return gen()
 
     async def close(self) -> None:

@@ -32,8 +32,8 @@ class SoundDeviceAudioStream(AudioStreamPort):
         self._sample_rate = sample_rate
         self._show_meter = show_meter
 
-        self._closed = False      # iteration is over
-        self._released = False    # hardware has been released
+        self._closed = False  # iteration is over
+        self._released = False  # hardware has been released
 
         self._chunk_count = 0
         self._total_bytes = 0
@@ -72,7 +72,7 @@ class SoundDeviceAudioStream(AudioStreamPort):
         except Exception as error:
             logger.error("Microphone stream read failed: %r", error)
             self._closed = True
-            raise StopAsyncIteration
+            raise StopAsyncIteration from error
 
     async def close(self) -> None:
         self._closed = True
@@ -81,7 +81,9 @@ class SoundDeviceAudioStream(AudioStreamPort):
         self._released = True
         logger.info(
             "Stream closed | chunks=%d bytes=%d overflows=%d",
-            self._chunk_count, self._total_bytes, self._overflow_count,
+            self._chunk_count,
+            self._total_bytes,
+            self._overflow_count,
         )
         try:
             try:
@@ -113,5 +115,3 @@ class SoundDeviceAudioStream(AudioStreamPort):
         )
         sys.stdout.write(line.ljust(120))
         sys.stdout.flush()
-
-

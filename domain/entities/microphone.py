@@ -1,5 +1,3 @@
-from typing import Optional
-
 from domain.errors import CaptureAlreadyActive, CaptureNotActive
 from domain.value_objects.audio_format import AudioFormat
 
@@ -13,7 +11,7 @@ class Microphone:
     """
 
     def __init__(self) -> None:
-        self._active_format: Optional[AudioFormat] = None
+        self._active_format: AudioFormat | None = None
 
     @property
     def is_capturing(self) -> bool:

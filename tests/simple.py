@@ -32,12 +32,13 @@ HOST = "127.0.0.1"
 PORT = 8000
 BASE_URL = f"http://{HOST}:{PORT}"
 STREAM_READ_SECONDS = 2  # How long to read audio chunks from each streaming endpoint
-STARTUP_TIMEOUT = 10     # Max seconds to wait for the server to become healthy
+STARTUP_TIMEOUT = 10  # Max seconds to wait for the server to become healthy
 
 
 # ──────────────────────────────────────────────
 # SERVER LIFECYCLE
 # ──────────────────────────────────────────────
+
 
 async def start_server() -> tuple[uvicorn.Server, asyncio.Task]:
     """Boot the microservice exactly like main.py does and return
@@ -66,9 +67,7 @@ async def start_server() -> tuple[uvicorn.Server, asyncio.Task]:
                 pass
             await asyncio.sleep(0.2)
         else:
-            raise RuntimeError(
-                f"Server did not become healthy within {STARTUP_TIMEOUT}s"
-            )
+            raise RuntimeError(f"Server did not become healthy within {STARTUP_TIMEOUT}s")
 
     return server, task
 
@@ -82,6 +81,7 @@ async def stop_server(server: uvicorn.Server, task: asyncio.Task) -> None:
 # ──────────────────────────────────────────────
 # HELPERS
 # ──────────────────────────────────────────────
+
 
 def print_header(title: str) -> None:
     print(f"\n{'─'*50}")
@@ -114,6 +114,7 @@ async def read_stream_for(response: httpx.Response, seconds: float) -> int:
 # ──────────────────────────────────────────────
 # TEST STEPS
 # ──────────────────────────────────────────────
+
 
 async def test_health(client: httpx.AsyncClient) -> bool:
     print_header("1. Health Check  →  GET /health")
@@ -188,6 +189,7 @@ async def test_stop(client: httpx.AsyncClient) -> bool:
 # ──────────────────────────────────────────────
 # MAIN
 # ──────────────────────────────────────────────
+
 
 async def run_tests() -> None:
     print("\n" + "=" * 50)
