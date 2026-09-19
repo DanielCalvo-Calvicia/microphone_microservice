@@ -4,13 +4,14 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from application.ports.microphone_port import AudioStream, MicrophonePort
+from application.ports.outbound.audio_capture_port import AudioCapturePort
+from application.ports.outbound.audio_stream_port import AudioStreamPort
 from application.services.microphone_service import MicrophoneService
 from domain.value_objects.audio_format import AudioFormat
-from infrastructure.inbound.http.routes.microphone_routes import build_microphone_router
+from infrastructure.inbound.http.http_handler import MicrophoneHandler
 
 
-class FiniteStream(AudioStream):
+class FiniteStream(AudioStreamPort):
     def __init__(self, sample_rate: int):
         self._sample_rate = sample_rate
 
@@ -28,15 +29,15 @@ class FiniteStream(AudioStream):
         pass
 
 
-class FakePort(MicrophonePort):
-    async def open_stream(self, audio_format: AudioFormat) -> AudioStream:
+class FakePort(AudioCapturePort):
+    async def open_stream(self, audio_format: AudioFormat) -> AudioStreamPort:
         return FiniteStream(audio_format.sample_rate)
 
 
 @pytest.fixture
 def client():
     app = FastAPI()
-    app.include_router(build_microphone_router(MicrophoneService(FakePort())))
+    app.include_router(MicrophoneHandler(MicrophoneService(FakePort())).router)
     return TestClient(app)
 
 
