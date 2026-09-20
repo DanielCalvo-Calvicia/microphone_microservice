@@ -36,7 +36,6 @@ HTTP handler ──▶ MicrophoneStreamingPort ◀── MicrophoneService ─�
 main.py                           calls main_flow.http.run_http()
 main_flow/
   http.py                         config -> container -> uvicorn -> shutdown cleanup
-  logging_setup.py                configure_logging (TRACE/WARN aliases)
 domain/
   errors.py                       DomainError, InvalidAudioFormat, CaptureAlreadyActive, CaptureNotActive
   value_objects/audio_format.py   AudioFormat(sample_rate, channels, chunk_size) — all fields > 0
@@ -79,7 +78,7 @@ tests/  domain/ application/ infrastructure/ composition_root/ architecture/   (
 
 ## Deliberate changes
 
-* `print` tracing (~154 calls, two per audio chunk) → `logging`; `LOG_LEVEL` is now honoured (default INFO).
+* `print` tracing (~154 calls, two per audio chunk) → structured logging, now through the shared `shared_logging` package (`LOG_LEVEL` honoured, default INFO; trace context added automatically).
 * `POST /stop` no longer needs an empty JSON body.
 * A retry with a format identical to the one that just failed is skipped.
 * A raw stream that fails in `start()` is now closed (previously leaked). Shutdown cleanup runs in `finally`.

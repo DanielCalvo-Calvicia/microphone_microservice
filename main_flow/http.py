@@ -1,26 +1,30 @@
-import logging
 
 import uvicorn
+from shared_logging import get_logger, init_logging
 
 from composition_root.containers.http_container import HttpContainer, new_http_container
 from infrastructure.config.microphone_config import MicrophoneConfig
 from infrastructure.config.server_config import ServerConfig
-from main_flow.logging_setup import configure_logging
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 async def run_http() -> None:
     server_cfg = ServerConfig.from_env()
     microphone_cfg = MicrophoneConfig.from_env()
-    configure_logging(server_cfg.log_level)
+    init_logging("microphone")
 
     container = new_http_container(server_cfg, microphone_cfg)
     server = uvicorn.Server(
-        uvicorn.Config(container.app, host=server_cfg.host, port=server_cfg.port)
+        uvicorn.Config(
+            container.app, host=server_cfg.host, port=server_cfg.port, log_config=None
+        )
     )
     logger.info(
-        "%s - starting server on %s:%s", server_cfg.service_name, server_cfg.host, server_cfg.port
+        "Starting server",
+        service_name=server_cfg.service_name,
+        host=server_cfg.host,
+        port=server_cfg.port,
     )
     try:
         await server.serve()  # returns after SIGINT/SIGTERM

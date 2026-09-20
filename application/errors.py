@@ -15,3 +15,7 @@ class StreamCloseFailed(ApplicationError, RuntimeError):
 
 class StreamReadFailed(ApplicationError):
     """The device failed while a stream was being read; the stream is no longer usable."""
+
+
+class FormatMismatch(ApplicationError, ValueError):
+    """A request names an audio format that differs from the one the active capture runs at."""

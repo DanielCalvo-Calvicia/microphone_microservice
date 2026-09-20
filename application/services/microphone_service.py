@@ -1,5 +1,6 @@
 import asyncio
-import logging
+
+from shared_logging import get_logger
 
 from application.dtos.start_stream_inbound import StartStreamInboundDTO
 from application.dtos.stream_outbound import StreamOutboundDTO
@@ -10,7 +11,7 @@ from domain.entities.microphone import Microphone
 from domain.errors import CaptureNotActive
 from domain.value_objects.audio_format import AudioFormat
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class MicrophoneService(MicrophoneStreamingPort):
@@ -23,7 +24,7 @@ class MicrophoneService(MicrophoneStreamingPort):
         self._stream: AudioStreamPort | None = None
         # start/stop are read-modify-write sequences that await the device.
         self._lock = asyncio.Lock()
-        logger.info("MicrophoneService initialized name=%r", name)
+        logger.info("MicrophoneService initialized", name=name)
 
     async def start_stream(self, request: StartStreamInboundDTO) -> StreamOutboundDTO:
         requested = AudioFormat(
@@ -37,7 +38,7 @@ class MicrophoneService(MicrophoneStreamingPort):
             self._microphone.start(requested.with_sample_rate(stream.sample_rate))
             self._stream = stream
             stream.on_terminated(lambda: self._handle_stream_terminated(stream))
-        logger.info("Microphone stream started sample_rate=%s", stream.sample_rate)
+        logger.info("Microphone stream started", sample_rate=stream.sample_rate)
         return StreamOutboundDTO(sample_rate=stream.sample_rate, stream=stream)
 
     async def stop_stream(self) -> None:
@@ -48,6 +49,9 @@ class MicrophoneService(MicrophoneStreamingPort):
             self._stream = None
             self._microphone.stop()
         logger.info("Microphone stream stopped")
+
+    async def check_device(self) -> tuple[bool, str | None]:
+        return await self._capture.check_device()
 
     def is_available(self) -> bool:
         return self._microphone.is_capturing

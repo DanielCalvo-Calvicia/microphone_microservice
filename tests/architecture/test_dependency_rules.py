@@ -13,6 +13,8 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[2]
 OWN_PACKAGES = {"domain", "application", "infrastructure", "composition_root", "main_flow"}
+# Cross-cutting logging/tracing library shared by every microservice (replaces stdlib logging).
+SHARED_LIBRARIES = {"shared_logging"}
 FRAMEWORKS = {"fastapi", "starlette", "pydantic", "uvicorn", "sounddevice", "numpy", "httpx"}
 
 
@@ -41,7 +43,11 @@ def violations(
         for module in imported_modules(path):
             top = module.split(".")[0]
             forbidden = any(module == p or module.startswith(p + ".") for p in forbidden_prefixes)
-            third_party = top not in sys.stdlib_module_names and top not in OWN_PACKAGES
+            third_party = (
+                top not in sys.stdlib_module_names
+                and top not in OWN_PACKAGES
+                and top not in SHARED_LIBRARIES
+            )
             if forbidden or (third_party and not allow_third_party):
                 problems.append(f"{path.relative_to(ROOT)} imports {module}")
     return problems

@@ -4,11 +4,10 @@ from infrastructure.config.server_config import ServerConfig
 
 def test_server_config_defaults():
     cfg = ServerConfig.from_env({})
-    assert (cfg.service_name, cfg.host, cfg.port, cfg.log_level) == (
+    assert (cfg.service_name, cfg.host, cfg.port) == (
         "Microphone Microservice",
         "127.0.0.1",
         8000,
-        "INFO",
     )
 
 
@@ -18,10 +17,9 @@ def test_server_config_overrides():
             "SERVICE_NAME": "X",
             "SERVICE_HOST": "0.0.0.0",
             "SERVICE_PORT": "9000",
-            "LOG_LEVEL": "DEBUG",
         }
     )
-    assert (cfg.service_name, cfg.host, cfg.port, cfg.log_level) == ("X", "0.0.0.0", 9000, "DEBUG")
+    assert (cfg.service_name, cfg.host, cfg.port) == ("X", "0.0.0.0", 9000)
 
 
 def test_microphone_config_defaults():

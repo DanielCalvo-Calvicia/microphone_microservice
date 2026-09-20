@@ -1,11 +1,11 @@
 """Outbound adapter: the live stream read from an open input device."""
 
 import asyncio
-import logging
 import sys
 from collections.abc import AsyncIterator, Callable
 
 import numpy as np
+from shared_logging import get_logger
 
 from application.ports.outbound.audio_stream_port import AudioStreamPort
 from domain.operations.pcm import downmix_to_mono
@@ -15,7 +15,7 @@ from infrastructure.outbound.sounddevice_capture.sounddevice_error_mapper import
     map_read_error,
 )
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class SoundDeviceAudioStream(AudioStreamPort):
@@ -77,7 +77,7 @@ class SoundDeviceAudioStream(AudioStreamPort):
             self._terminate()
             raise
         except Exception as error:
-            logger.error("Microphone stream read failed: %r", error)
+            logger.error("Microphone stream read failed", error=error)
             self._terminate()
             raise map_read_error(error) from error
 
@@ -105,10 +105,10 @@ class SoundDeviceAudioStream(AudioStreamPort):
             return
         self._released = True
         logger.info(
-            "Stream closed | chunks=%d bytes=%d overflows=%d",
-            self._chunk_count,
-            self._total_bytes,
-            self._overflow_count,
+            "Stream closed",
+            chunks=self._chunk_count,
+            bytes=self._total_bytes,
+            overflows=self._overflow_count,
         )
         try:
             if self._raw_stream.active:

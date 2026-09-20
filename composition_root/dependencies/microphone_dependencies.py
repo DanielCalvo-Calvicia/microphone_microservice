@@ -1,4 +1,5 @@
 from fastapi import FastAPI
+from shared_logging import TracingMiddleware
 
 from application.ports.inbound.microphone_streaming_port import MicrophoneStreamingPort
 from application.ports.outbound.audio_capture_port import AudioCapturePort
@@ -36,4 +37,5 @@ def new_http_app(port: MicrophoneStreamingPort, name: str) -> FastAPI:
         openapi_url="/openapi.json",
     )
     app.include_router(MicrophoneHandler(port).router)
+    app.add_middleware(TracingMiddleware)
     return app

@@ -17,7 +17,8 @@ Configuration is read from the environment; see `.env.example`.
 | `SERVICE_NAME` | `Microphone Microservice` | API title / log name |
 | `SERVICE_HOST` | `127.0.0.1` | Bind address |
 | `SERVICE_PORT` | `8000` | Bind port |
-| `LOG_LEVEL` | `INFO` | `TRACE`→DEBUG, `WARN`→WARNING also accepted |
+| `LOG_LEVEL` | `INFO` | Read by the shared logging module; `TRACE`→DEBUG, `WARN`→WARNING also accepted |
+| `LOG_FORMAT`, `SERVICE_NAME`, `TRACE_EXPORT_*` | see docs | Also read by the shared logging module: [`shared-logging/docs/logging.md`](../shared-logging/docs/logging.md) |
 | `MICROPHONE_FALLBACK_SAMPLE_RATE` | `16000` | Rate used if the device reports none |
 | `MICROPHONE_TARGET_KEYWORDS` | *(empty)* | Comma-separated device-name keywords; empty = OS default input |
 | `MICROPHONE_SHOW_METER` | `true` | Console volume meter |
@@ -46,7 +47,7 @@ Notes:
 
 ```text
 main.py            entry point (calls main_flow)
-main_flow/         startup, logging and graceful shutdown
+main_flow/         startup and graceful shutdown (logging: shared `shared_logging` package)
 composition_root/  the only place concrete adapters are wired together
 infrastructure/    config, HTTP (inbound) and sounddevice (outbound) adapters
 application/       use-case service, ports, DTOs, application errors

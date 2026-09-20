@@ -13,3 +13,7 @@ class AudioCapturePort(ABC):
 
         Raises MicrophoneUnavailable if no working device/format can be opened.
         """
+
+    async def check_device(self) -> tuple[bool, str | None]:
+        """Whether a usable input device exists (probed, not opened): ``(ok, reason)``."""
+        return True, None

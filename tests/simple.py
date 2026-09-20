@@ -12,6 +12,7 @@ Usage:
 """
 
 import asyncio
+import base64
 import sys
 import time
 from pathlib import Path
@@ -22,6 +23,9 @@ sys.path.insert(0, str(repo_root))
 
 import httpx
 import uvicorn
+from contracts.stream.codec import NdjsonDecoder
+from contracts.stream.common.base import EventType
+from contracts.stream.schemas import MICROPHONE_OUTBOUND
 
 from composition_root.containers.http_container import new_http_container
 from infrastructure.config.microphone_config import MicrophoneConfig
@@ -98,17 +102,20 @@ def print_result(label: str, success: bool, detail: str = "") -> None:
 
 
 async def read_stream_for(response: httpx.Response, seconds: float) -> int:
-    """Read bytes from a streaming response for a limited duration.
-    Returns total bytes read."""
-    total_bytes = 0
+    """Read the microphone's event stream for a limited duration, validating it against the
+    ``MICROPHONE_OUTBOUND`` contract. Returns the number of PCM16 audio bytes received."""
+    audio_bytes = 0
     deadline = time.monotonic() + seconds
+    decoder = NdjsonDecoder(MICROPHONE_OUTBOUND)
 
     async for chunk in response.aiter_bytes(chunk_size=4096):
-        total_bytes += len(chunk)
+        for event in decoder.feed(chunk):
+            if event.type is EventType.PARTIAL:
+                audio_bytes += len(base64.b64decode(event.payload.bytes_base64))
         if time.monotonic() >= deadline:
             break
 
-    return total_bytes
+    return audio_bytes
 
 
 # ──────────────────────────────────────────────
@@ -151,7 +158,7 @@ async def test_start(client: httpx.AsyncClient) -> bool:
     print_result(
         "Start + Stream",
         ok,
-        f"status={resp.status_code}  bytes_read={total}  "
+        f"status={resp.status_code}  audio_bytes={total}  "
         f"sample_rate={sample_rate}  x-status={status_hdr}",
     )
     return ok
@@ -172,7 +179,7 @@ async def test_stream(client: httpx.AsyncClient) -> bool:
     print_result(
         "Stream",
         ok,
-        f"status={resp.status_code}  bytes_read={total}  sample_rate={sample_rate}",
+        f"status={resp.status_code}  audio_bytes={total}  sample_rate={sample_rate}",
     )
     return ok
 

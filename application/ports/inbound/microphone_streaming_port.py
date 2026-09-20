@@ -22,3 +22,7 @@ class MicrophoneStreamingPort(ABC):
     @abstractmethod
     def current_stream(self) -> StreamOutboundDTO:
         """The active stream. Raises CaptureNotActive if none is active."""
+
+    async def check_device(self) -> tuple[bool, str | None]:
+        """Whether a usable input device exists: ``(ok, reason if not)``."""
+        return True, None
