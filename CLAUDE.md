@@ -2,9 +2,11 @@
 
 Port **8000**. Python/FastAPI. Captures audio from the local input device (`sounddevice`/PortAudio, Windows) and streams mono PCM16. Status: working, needs retest after recent changes. See `README.md` and `../CLAUDE.md`.
 
+Current state (2026-09-22): branch `feature_ai_claude`, clean, last commit "Microphone: emit contract event streams, natural HTTP statuses, device probe".
+
 ## Role
 
-Brain calls `POST /start`, reads `GET /stream`, calls `POST /stop`. Nothing else calls it. Stream events are defined in `contracts.stream` (`MICROPHONE_OUTBOUND`) and encoded with the codec. Silent chunks are suppressed, and `completed` is emitted after about 2 s of silence.
+Brain calls `POST /start`, reads `GET /stream`, calls `POST /stop`. Also `GET /available` and `GET /health`. Nothing else calls it. Stream events are defined in `contracts.stream` (`MICROPHONE_OUTBOUND`) and encoded with the codec. Silent chunks are suppressed, and `completed` is emitted after about 2 s of silence.
 
 ## Layout
 
@@ -13,8 +15,9 @@ Brain calls `POST /start`, reads `GET /stream`, calls `POST /stop`. Nothing else
 ## Rules
 
 - Audio stays PCM16 mono. No format conversion here beyond what the device needs.
-- Config through env (`.env.example`): `SERVICE_HOST`, `SERVICE_PORT`, `MICROPHONE_FALLBACK_SAMPLE_RATE`, `MICROPHONE_TARGET_KEYWORDS`. Bind host must be configurable (containers/remote use).
-- This is the only service with ruff and mypy configured. Keep both clean.
+- Config through env (`.env.example`): `SERVICE_NAME`, `SERVICE_HOST`, `SERVICE_PORT`, `LOG_LEVEL`, `MICROPHONE_FALLBACK_SAMPLE_RATE`, `MICROPHONE_TARGET_KEYWORDS`, `MICROPHONE_SHOW_METER`. Bind host must be configurable (containers/remote use).
+- Ruff and mypy are configured in `pyproject.toml` and installed in this venv (the only one). Keep both clean.
+- Gotcha: `.env.staging` and `.env.production` exist next to `.env`. Do not open or copy them.
 
 ## Commands
 
