@@ -2,7 +2,7 @@
 
 Port **8000** (`SERVICE_PORT`). Python/FastAPI. Captures audio from the local input device (`sounddevice`/PortAudio, Windows) and streams mono PCM16 as `contracts.stream` events. Status: working, needs retest on hardware after recent changes. See `README.md` and `../CLAUDE.md`.
 
-Current state (2026-10-01): branch `feature_ai_claude_2` (tracks `origin/feature_ai_claude_2`, in sync), working tree clean, last commit `55def40` "Bundle contracts 0.9.0". Tests: `88 passed`, ruff clean, mypy clean (48 files). Hardware (`tests/simple.py`, the real sounddevice adapter) not run in the last documentation pass.
+Current state (2026-10-01): branch `feature_ai_claude_2` (tracks `origin/feature_ai_claude_2`, in sync), working tree clean, last feature commit `d98c699` "Bundle contracts 0.10.0; refresh README, CLAUDE.md and architecture docs" (pushed). Tests: `88 passed`, ruff clean, mypy clean (48 files). Hardware (`tests/simple.py`, the real sounddevice adapter) not run in the last documentation pass.
 
 ## Role
 
