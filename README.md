@@ -5,7 +5,7 @@ HTTP service that captures audio from the local input device (`sounddevice`/Port
 ## Run
 
 ```bash
-pip install -r requirements.windows.txt
+pip install -r requirements.windows.txt   # Linux / Raspberry Pi: requirements.linux.txt
 python main.py
 ```
 
