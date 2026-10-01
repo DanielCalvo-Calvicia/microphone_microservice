@@ -1,3 +1,9 @@
+> **HISTORICAL (banner added 2026-10-01).** This is the plan written before the Clean Architecture
+> refactor. It was executed: the layers, ports and tests it describes now exist, so the "starting point"
+> and "nothing has been modified" statements below are no longer true, and `docs/general.md` /
+> `README.md` were already replaced. For what the code is today read `README.md` and
+> `docs/architecture/architecture.md`. Kept for the reasoning behind the layout only.
+
 # Migration Plan — `microphone_microservice` → Engram Architecture Standard (Python edition)
 
 This document explains how to change the **current** project so it satisfies the Engram architecture standard (`ENGRAM_ARCHITECTURE_PROMPT.md`, written for Go), adapted to Python. It covers two things: **how the folder structure must change** and **how the code inside it must be reorganized**.

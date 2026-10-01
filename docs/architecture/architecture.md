@@ -1,6 +1,6 @@
 # Architecture
 
-This document describes the architecture **after** the Clean Architecture refactor and records what was wrong before. It supersedes the legacy docs in `docs/old/`.
+This document describes the architecture **after** the Clean Architecture refactor and records what was wrong before. It supersedes the legacy docs in `docs/old/`. Reviewed against the code on 2026-10-01 (branch `feature_ai_claude_2`).
 
 ## Layers and dependency rule
 
@@ -43,7 +43,7 @@ domain/
   operations/pcm.py               downmix_to_mono(pcm, channels)
   operations/format_negotiation.py fallback_formats(requested, device_default_rate)
 application/
-  errors.py                       ApplicationError, MicrophoneUnavailable, StreamCloseFailed
+  errors.py                       ApplicationError, MicrophoneUnavailable, StreamCloseFailed, StreamReadFailed, FormatMismatch
   dtos/start_stream_inbound.py    StartStreamInboundDTO
   dtos/stream_outbound.py         StreamOutboundDTO
   ports/inbound/microphone_streaming_port.py   MicrophoneStreamingPort (driving)
@@ -52,7 +52,8 @@ application/
   services/microphone_service.py  MicrophoneService — orchestration + lock, no rules of its own
 infrastructure/
   config/                         ServerConfig, MicrophoneConfig (env -> frozen dataclasses)
-  inbound/http/                   http_handler.py (MicrophoneHandler), http_envelope.py, http_error_mapper.py
+  inbound/http/                   http_handler.py (MicrophoneHandler), http_envelope.py (ApiEnvelope answers), http_error_mapper.py,
+                                  ndjson_audio_events.py (frames the capture as contracts.stream events)
   outbound/sounddevice_capture/   audio_driver.py (protocol), sounddevice_driver.py, sounddevice_device_selector.py,
                                   sounddevice_audio_capture.py, sounddevice_audio_stream.py, sounddevice_error_mapper.py
 composition_root/
@@ -71,12 +72,16 @@ tests/  domain/ application/ infrastructure/ composition_root/ architecture/   (
 
 ## Behaviour that was deliberately preserved
 
-* Every failure returns HTTP 500 with the same JSON envelope (`action/status/status_code/message/timestamp/data`).
+* Every non-stream answer keeps the JSON envelope (`action/status/status_code/message/timestamp/data`, now `contracts.api.common.envelope.ApiEnvelope`).
 * `channels > 1` requests are still delivered as mono.
-* `/available` still means "a stream is active"; `/start` still returns JSON, audio is read from `/stream`.
+* `/start` still returns JSON, audio is read from `/stream`. (`/available` no longer means "a stream is active": it probes whether an input device is usable, see "Deliberate changes".)
 * A client disconnecting from `/stream` still ends the shared stream (see "Deliberate changes": the service now goes idle by itself).
 
 ## Deliberate changes
+
+* **Contract streams (since the 2026-09-20 commit).** `GET /stream` is no longer raw PCM: it is NDJSON `contracts.stream` events (`stream_started`, one `partial` per chunk with `bytes_base64`, then `completed`, or an `error` event on a mid-stream device failure). The microphone does no silence detection.
+* **Natural HTTP statuses.** Failures are mapped by `http_error_mapper.py`: 409 capture already active/not active, 422 invalid format or a `sample_rate` on `/stream` that differs from the active capture, 503 no usable device, 500 anything else.
+* **Device probe.** `GET /available` answers `AvailabilityResponse{is_available, reason}` by probing the selected device without opening it.
 
 * `print` tracing (~154 calls, two per audio chunk) → structured logging, now through the shared `shared_logging` package (`LOG_LEVEL` honoured, default INFO; trace context added automatically).
 * `POST /stop` no longer needs an empty JSON body.
@@ -88,8 +93,8 @@ tests/  domain/ application/ infrastructure/ composition_root/ architecture/   (
 
 ## Known remaining debt
 
-1. Domain errors are not mapped to 4xx (`InvalidAudioFormat` → 422, `CaptureAlreadyActive` → 409); see `http_error_mapper.py`, decision D4.
+1. (Resolved) Domain errors are now mapped to 409/422/503 by `http_error_mapper.py`; only unexpected failures are 500.
 2. Requested `channels > 1` is silently mixed to mono and the response does not say so.
-3. `MICROPHONE_API_KEY` and `APP_ENV` are defined in `.env*` but never read; there is no authentication (decision D6).
+3. There is no authentication. The old notes said `MICROPHONE_API_KEY` and `APP_ENV` exist in the (git-ignored) `.env*` files but are never read: the code reads neither (checked by grep), and the `.env` files themselves were not opened.
 4. Blocking `sounddevice` calls now run via `asyncio.to_thread`, but this is unvalidated on real hardware.
 5. The sounddevice adapter is tested against a fake `AudioDriver`; run `python tests/simple.py` on the Windows machine with a real microphone to confirm.
