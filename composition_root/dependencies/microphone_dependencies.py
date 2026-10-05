@@ -4,6 +4,7 @@ from shared_logging import TracingMiddleware
 from application.ports.inbound.microphone_streaming_port import MicrophoneStreamingPort
 from application.ports.outbound.audio_capture_port import AudioCapturePort
 from application.services.microphone_service import MicrophoneService
+from domain.value_objects.input_treatment import InputTreatment
 from infrastructure.config.microphone_config import MicrophoneConfig
 from infrastructure.inbound.http.http_handler import MicrophoneHandler
 from infrastructure.outbound.sounddevice_capture.sounddevice_audio_capture import (
@@ -23,8 +24,10 @@ def new_audio_capture(cfg: MicrophoneConfig) -> AudioCapturePort:
     )
 
 
-def new_microphone_service(capture: AudioCapturePort, name: str) -> MicrophoneStreamingPort:
-    return MicrophoneService(capture=capture, name=name)
+def new_microphone_service(
+    capture: AudioCapturePort, name: str, treatment: InputTreatment | None = None
+) -> MicrophoneStreamingPort:
+    return MicrophoneService(capture=capture, name=name, treatment=treatment)
 
 
 def new_http_app(port: MicrophoneStreamingPort, name: str) -> FastAPI:

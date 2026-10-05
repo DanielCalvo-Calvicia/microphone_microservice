@@ -19,3 +19,7 @@ class CaptureAlreadyActive(DomainError, RuntimeError):
 
 class CaptureNotActive(DomainError, RuntimeError):
     """The operation requires an active capture but the microphone is idle."""
+
+
+class InvalidInputTreatment(DomainError, ValueError):
+    """A setting of the input treatment is out of range (e.g. a negative silence threshold)."""

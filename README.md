@@ -20,6 +20,13 @@ python main.py
 | `MICROPHONE_FALLBACK_SAMPLE_RATE` | `16000` | Rate used if the device reports none |
 | `MICROPHONE_TARGET_KEYWORDS` | *(empty)* | Comma-separated device-name keywords (first match wins); empty = OS default input |
 | `MICROPHONE_SHOW_METER` | `true` | Console volume meter (`1`, `true` or `yes`) |
+| `MICROPHONE_SILENCE_THRESHOLD` | `150` | Volume (RMS of 16-bit samples) under which it is silent |
+| `MICROPHONE_SILENCE_LIMIT_SECONDS` | `2.0` | Seconds of silence that end an utterance (must be above 0) |
+| `MICROPHONE_SPEECH_START_FACTOR` | `2.0` | Speech starts at threshold x this factor (at least 1) |
+| `MICROPHONE_DC_OFFSET_REMOVAL` | `false` | Subtract the slowly changing constant offset of the signal before measuring volume |
+| `MICROPHONE_VOLUME_SMOOTHING` / `MICROPHONE_VOLUME_SMOOTHING_FACTOR` | `true` / `0.1` | Measure a smoothed volume (weight of the newest chunk, above 0 up to 1) so one click is not speech |
+| `MICROPHONE_NOISE_FLOOR_TRACKING` | `true` | Raise the thresholds above the quietest volume heard (speech over 3 x it, silence under 2 x it) |
+| `MICROPHONE_RESAMPLE_TO_HZ` | `0` | Rate of the audio sent on (linear interpolation); `0` = the device's rate, `16000` = what Whisper uses |
 
 `LOG_FORMAT`, `LOG_OUTPUT`, `ENVIRONMENT` and `TRACE_EXPORT_*` are also read by the shared logging package, not by this service: see [`shared-logging/docs/logging.md`](../shared-logging/docs/logging.md). `.env.example` lists the seven variables above, the same as `ServerConfig`/`MicrophoneConfig` in `infrastructure/config/`.
 
@@ -35,7 +42,7 @@ Non-stream answers use the envelope `action / status / status_code / message / t
 | POST | `/stop` | Releases the device. Idempotent; no body needed |
 | GET | `/health` | Liveness (`HealthCheckResponse{healthy: true}`) |
 
-Stream events (`contracts.stream`, `MICROPHONE_OUTBOUND`): `stream_started` (`message`, `sample_rate`, `channels`), then one `partial` (`bytes_base64`, raw PCM16 mono) per captured chunk, then `completed` (`reason`, `output_bytes_base64` always empty) when the capture ends, or an `error` event (`code: capture_failed`, `recoverable: false`) if the device fails mid-stream. Every chunk is forwarded; the microphone does no silence detection (that is STT's job).
+Stream events (`contracts.stream`, `MICROPHONE_OUTBOUND`): `stream_started` (`message`, `sample_rate`, `channels`), then one `utterance` (`bytes_base64`, raw PCM16 mono, and its `sample_rate`) per finished utterance, then `completed` (`reason`, `output_bytes_base64` always empty) when the capture ends, or an `error` event (`code: capture_failed`, `recoverable: false`) if the device fails mid-stream. The microphone cuts what it hears into utterances (silence detection lives here, not in STT): an utterance starts when the volume reaches the start threshold and ends after `MICROPHONE_SILENCE_LIMIT_SECONDS` of silence, and the utterance in progress is sent when the capture is closed (it is lost if the device fails). The cutting is always on; each treatment (DC offset removal, volume smoothing, noise-floor tracking, resampling) has its own `MICROPHONE_*` variable. `/start` and `X-Sample-Rate` report the rate of what is sent, which is `MICROPHONE_RESAMPLE_TO_HZ` when it is set.
 
 HTTP status codes of failures (`infrastructure/inbound/http/http_error_mapper.py`): `409` capture already active / not active, `422` invalid audio format or `sample_rate` that differs from the active capture, `503` no usable input device, `500` anything else (device read/close failures).
 

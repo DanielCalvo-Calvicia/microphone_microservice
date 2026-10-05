@@ -22,6 +22,7 @@ from application.ports.outbound.audio_capture_port import AudioCapturePort
 from application.ports.outbound.audio_stream_port import AudioStreamPort
 from application.services.microphone_service import MicrophoneService
 from domain.value_objects.audio_format import AudioFormat
+from domain.value_objects.input_treatment import InputTreatment
 from infrastructure.inbound.http.http_handler import MicrophoneHandler
 
 
@@ -47,7 +48,8 @@ class EndlessStream(AudioStreamPort):
             self.cancelled.set()
             raise
         self.chunks_read += 1
-        return b"\x01\x00" * 160
+        loud = (self.chunks_read % 6) < 3  # 3 loud chunks, 3 silent ones, over and over: one utterance per cycle
+        return (b"\xff\x3f" if loud else b"\x00\x00") * 160
 
     def on_terminated(self, callback) -> None:
         pass
@@ -69,7 +71,8 @@ class Capture(AudioCapturePort):
 def running() -> Iterator[tuple[str, Capture]]:
     capture = Capture()
     app = FastAPI()
-    app.include_router(MicrophoneHandler(MicrophoneService(capture)).router)
+    treatment = InputTreatment(silence_limit_seconds=0.02, volume_smoothing=False, noise_floor_tracking=False)
+    app.include_router(MicrophoneHandler(MicrophoneService(capture, treatment=treatment)).router)
     with socket.socket() as probe:
         probe.bind(("127.0.0.1", 0))
         port = probe.getsockname()[1]
@@ -105,6 +108,6 @@ def test_events_flow_in_order_and_a_client_that_disconnects_cancels_the_capture(
 
     seen = asyncio.run(run())
 
-    assert seen == [EventType.START_STREAM, EventType.PARTIAL, EventType.PARTIAL, EventType.PARTIAL]
+    assert seen == [EventType.START_STREAM, EventType.UTTERANCE, EventType.UTTERANCE, EventType.UTTERANCE]
     assert capture.stream is not None
     assert capture.stream.cancelled.wait(timeout=5), "the disconnect never reached the capture iterator"

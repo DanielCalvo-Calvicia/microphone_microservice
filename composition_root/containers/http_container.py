@@ -16,6 +16,8 @@ class HttpContainer:
 
 def new_http_container(server_cfg: ServerConfig, microphone_cfg: MicrophoneConfig) -> HttpContainer:
     capture = deps.new_audio_capture(microphone_cfg)
-    service = deps.new_microphone_service(capture, server_cfg.service_name)
+    service = deps.new_microphone_service(
+        capture, server_cfg.service_name, microphone_cfg.treatment
+    )
     app = deps.new_http_app(service, server_cfg.service_name)
     return HttpContainer(app=app, microphone=service)

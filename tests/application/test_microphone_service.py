@@ -75,7 +75,7 @@ def test_start_opens_device_with_requested_format_and_marks_available():
         assert port.opened == [AudioFormat(8000, 1, 256)]
         assert stream.sample_rate == 8000
         assert service.is_available()
-        assert service.current_stream().stream is port.streams[0]
+        assert service.current_stream() is stream  # the one stream of utterances, however often it is asked for
 
     run(scenario())
 
@@ -222,5 +222,39 @@ def test_stale_termination_of_a_replaced_stream_is_ignored():
         port.streams[0].terminate()  # the first stream reports late
 
         assert service.is_available()
+
+    run(scenario())
+
+
+def test_the_stream_it_hands_out_is_the_capture_cut_into_utterances_at_the_rate_asked_for():
+    from array import array
+
+    from domain.value_objects.input_treatment import InputTreatment
+
+    loud = array("h", [1000, -1000] * 25).tobytes()
+
+    class LoudStream(FakeStream):
+        def __aiter__(self):
+            async def gen():
+                for chunk in (loud, loud, bytes(100), bytes(100), loud):
+                    yield chunk
+
+            return gen()
+
+    class LoudCapture(FakeCapture):
+        async def open_stream(self, audio_format):
+            return LoudStream(1000)
+
+    async def scenario():
+        treatment = InputTreatment(
+            silence_threshold=100, silence_limit_seconds=0.1, volume_smoothing=False,
+            noise_floor_tracking=False, resample_to_hz=500,
+        )
+        service = MicrophoneService(LoudCapture(), treatment=treatment)
+        stream = await service.start_stream(StartStreamInboundDTO(1000, 1, 50))
+
+        assert stream.sample_rate == 500  # the rate of what it sends, not the device's
+        utterances = [u async for u in stream.stream]
+        assert len(utterances) == 2  # speech + silence, then the loud chunk that was cut off by the end of the stream
 
     run(scenario())

@@ -11,6 +11,7 @@ from application.ports.outbound.audio_capture_port import AudioCapturePort
 from application.ports.outbound.audio_stream_port import AudioStreamPort
 from application.services.microphone_service import MicrophoneService
 from domain.value_objects.audio_format import AudioFormat
+from domain.value_objects.input_treatment import InputTreatment
 from infrastructure.inbound.http.http_handler import MicrophoneHandler
 
 
@@ -44,7 +45,9 @@ class FakePort(AudioCapturePort):
 @pytest.fixture
 def client():
     app = FastAPI()
-    app.include_router(MicrophoneHandler(MicrophoneService(FakePort())).router)
+    # the fake capture is loud from its first chunk, which noise-floor tracking would take for the room's noise
+    treatment = InputTreatment(volume_smoothing=False, noise_floor_tracking=False)
+    app.include_router(MicrophoneHandler(MicrophoneService(FakePort(), treatment=treatment)).router)
     return TestClient(app)
 
 
@@ -104,16 +107,15 @@ def test_stream_speaks_the_microphone_outbound_contract(client):
     events = _decode_stream(response.content)  # raises ContractViolation on any drift
     assert [event.type for event in events] == [
         EventType.START_STREAM,
-        EventType.PARTIAL,
-        EventType.PARTIAL,
-        EventType.PARTIAL,
+        EventType.UTTERANCE,
         EventType.COMPLETED,
     ]
-    assert [event.sequence for event in events] == [1, 2, 3, 4, 5]
+    assert [event.sequence for event in events] == [1, 2, 3]
     started = events[0].payload
     assert (started.sample_rate, started.channels) == (22050, 1)
-    audio = b"".join(base64.b64decode(event.payload.bytes_base64) for event in events[1:4])
-    assert audio == b"abcd" * 3
+    utterance = events[1].payload
+    assert utterance.sample_rate == 22050
+    assert base64.b64decode(utterance.bytes_base64) == b"abcd" * 3  # the 3 loud chunks are one utterance
     assert events[-1].payload.reason == "completed"
 
 
@@ -136,7 +138,7 @@ def test_capture_failure_mid_stream_is_reported_as_an_error_event():
         failing_client.post("/start", json={"sample_rate": 16000})
         events = _decode_stream(failing_client.get("/stream").content)
 
-    assert [event.type for event in events] == [EventType.START_STREAM, EventType.PARTIAL, EventType.ERROR]
+    assert [event.type for event in events] == [EventType.START_STREAM, EventType.ERROR]  # the utterance in progress is lost
     assert events[-1].payload.code == "capture_failed"
     assert "device unplugged" in events[-1].payload.message
     assert events[-1].payload.recoverable is False

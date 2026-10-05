@@ -10,13 +10,13 @@ from contracts.stream.microservices.microphone.outbound.completed import (
     MicrophoneCompletedOutboundEvent,
     MicrophoneCompletedOutboundEventDTO,
 )
-from contracts.stream.microservices.microphone.outbound.partial import (
-    MicrophonePartialEvent,
-    MicrophonePartialEventDTO,
-)
 from contracts.stream.microservices.microphone.outbound.stream_started import (
     MicrophoneStreamStartedEvent,
     MicrophoneStreamStartedEventDTO,
+)
+from contracts.stream.microservices.microphone.outbound.utterance import (
+    MicrophoneUtteranceEvent,
+    MicrophoneUtteranceEventDTO,
 )
 from shared_logging import get_logger
 
@@ -27,12 +27,13 @@ CAPTURE_CHANNELS = 1  # the capture adapter always downmixes to mono int16
 
 
 async def ndjson_audio_events(
-    audio: AsyncIterable[bytes], sample_rate: int
+    utterances: AsyncIterable[bytes], sample_rate: int
 ) -> AsyncIterator[bytes]:
-    """``stream_started``, one ``partial`` per PCM chunk, then ``completed`` (or ``error``).
+    """``stream_started``, one ``utterance`` per finished utterance (PCM16 mono at ``sample_rate``),
+    then ``completed`` (or ``error``).
 
     ``completed.output_bytes_base64`` is empty: an open-ended capture never accumulates its audio,
-    the partials already carried all of it.
+    the utterances already carried all of it.
     """
     events = EventSequencer()
     started_at = time.monotonic()
@@ -47,12 +48,15 @@ async def ndjson_audio_events(
         )
     )
     try:
-        async for chunk in audio:
-            if chunk:
+        async for utterance in utterances:
+            if utterance:
                 yield encode_ndjson(
                     events.next(
-                        MicrophonePartialEvent,
-                        MicrophonePartialEventDTO(bytes_base64=base64.b64encode(chunk).decode("ascii")),
+                        MicrophoneUtteranceEvent,
+                        MicrophoneUtteranceEventDTO(
+                            bytes_base64=base64.b64encode(utterance).decode("ascii"),
+                            sample_rate=sample_rate,
+                        ),
                     )
                 )
     except Exception as error:
