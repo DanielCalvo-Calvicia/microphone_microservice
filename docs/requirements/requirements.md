@@ -37,8 +37,8 @@ Sources: `../CLAUDE.md` (the rules of the workspace), the contracts in `contract
 
 | ID | Requirement | Status | Where / record |
 |---|---|---|---|
-| FR-15 | A simulated capture backend behind the same ports, chosen by an environment variable (code default `real`), reported in `/available` and in the log, so a machine without a microphone can run and be deployed. | Planned | `docs/proposals/PR-001-simulated-capture-backend.md` |
-| FR-16 | Load `.env` at start (`python-dotenv`), then set `dotenv = true` in the deployment catalogue. | Planned | `docs/proposals/PR-002-dotenv-and-requirements-split.md` |
+| FR-15 | A simulated capture backend behind the same ports, chosen by an environment variable (code default `real`), reported in `/available` and in the log, so a machine without a microphone can run and be deployed. | Planned | T-02, `docs/proposals/PR-001-simulated-capture-backend.md` |
+| FR-16 | Load `.env` at start (`python-dotenv`), then set `dotenv = true` in the deployment catalogue. | Planned | T-03.1, T-03.3, `docs/proposals/PR-002-dotenv-and-requirements-split.md` |
 
 ## Non-functional
 

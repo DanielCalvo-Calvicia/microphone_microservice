@@ -174,7 +174,7 @@ Brain          handler            MicrophoneService      SoundDeviceAudioCapture
 
 ## 12. Known issues and debt
 
-1. **No simulation backend.** Without a device `/available` answers `is_available: false` and Brain's start-up preflight requires it, so a machine with no microphone cannot run the pipeline. The deployment readiness check (`ready = "/available"`) also fails there. Proposal: `docs/proposals/PR-001-simulated-capture-backend.md`.
+1. **No simulation backend.** Without a device `/available` answers `is_available: false` and Brain's start-up preflight requires it, so a machine with no microphone cannot run the pipeline. The deployment readiness check (`ready = "/available"`) also fails there. Proposal: `docs/proposals/PR-001-simulated-capture-backend.md` (epic T-02 in `docs/tasks/ORDER.md`).
 2. **`channels > 1` is mixed to mono silently**; the `/start` answer always says `channels = 1` and does not say the request was downmixed.
 3. **No authentication.** Service-to-service authentication is not designed for the project.
 4. **The sounddevice adapter is unvalidated on real hardware** since the last changes (it is tested against a fake `AudioDriver`; `tests/simple.py` needs a real microphone). The silence thresholds are not tuned on real rooms either.
@@ -186,7 +186,7 @@ Brain          handler            MicrophoneService      SoundDeviceAudioCapture
 
 ## 13. Recommendations
 
-**Planned (decided in the deployment audit of 2026-11-04, not built):**
+**Planned (from the deployment audit of 2026-11-04, not built; the order is in `docs/tasks/ORDER.md`: T-02 sim backend, T-03 start-up configuration, T-04 hardware verification):**
 
 - A `sim` backend behind `AudioCapturePort` (`PR-001`), code default `real`.
 - `python-dotenv` loading in `main_flow/http.py`, then `dotenv = true` in the deployment catalogue (and the matching test of `deployment`).

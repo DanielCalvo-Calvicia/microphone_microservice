@@ -1,6 +1,6 @@
 # CLAUDE.md: microphone_microservice
 
-Port **8000** (`SERVICE_PORT`). Python/FastAPI. Captures audio from the local input device (`sounddevice`/PortAudio, Windows) and streams mono PCM16 as `contracts.stream` events. Status: working, needs retest on hardware after recent changes. Read [README.md](README.md) for the state, [docs/architecture/architecture.md](docs/architecture/architecture.md) for the structure, [docs/README.md](docs/README.md) for the index of the documentation and `../CLAUDE.md` for the rules of the workspace.
+Port **8000** (`SERVICE_PORT`). Python/FastAPI. Captures audio from the local input device (`sounddevice`/PortAudio, Windows) and streams mono PCM16 as `contracts.stream` events. Status: working, needs retest on hardware after recent changes. Read [README.md](README.md) for the state, [docs/architecture/architecture.md](docs/architecture/architecture.md) for the structure, [docs/tasks/ORDER.md](docs/tasks/ORDER.md) for what is done and what comes next, [docs/README.md](docs/README.md) for the index of the documentation and `../CLAUDE.md` for the rules of the workspace.
 
 Current state (2026-11-05): branch `feature_ai_claude_2` (tracks `origin/feature_ai_claude_2`), last commit `b017314` "Bundle contracts 0.15.0". Tests: `127 passed`, ruff clean, mypy clean (53 files). Hardware (`tests/simple.py`, the real sounddevice adapter) not run since the utterance cutting moved here. `git status` is the truth for what is uncommitted.
 
@@ -10,14 +10,16 @@ Current state (2026-11-05): branch `feature_ai_claude_2` (tracks `origin/feature
 
 | If you change... | Update, in the same change |
 |---|---|
-| Code, a package, a folder or a file name | [docs/architecture/architecture.md](docs/architecture/architecture.md) (sections 3, 4 and 6), the layout of [README.md](README.md) and the **Layout** below |
+| The state of a task (started, done, blocked, split, a new task, a new dependency, the order) | the task file (`Status`, `Depends on`, *Results* or *Resolution*), the board in [docs/tasks/README.md](docs/tasks/README.md) section 5, **[docs/tasks/ORDER.md](docs/tasks/ORDER.md)** (state, detail, last updated; keep the order), the epic file and the work item of [docs/setup/16_work-items.md](docs/setup/16_work-items.md) |
+| Code, a package, a folder or a file name | [docs/architecture/architecture.md](docs/architecture/architecture.md) (sections 3, 4 and 6), the paths named in the task files, the layout of [README.md](README.md), [docs/tasks/README.md](docs/tasks/README.md) section 3.1 and the **Layout** below |
 | An environment variable, a default or a rule | `.env.example`, the table of [README.md](README.md), [docs/configuration/environment-variables.md](docs/configuration/environment-variables.md), the **Rules** below, and (outside this repository) `deployment/docs/DEPLOYMENT.md` and `deployment/config/services/microphone.toml` (regenerate with `brain_microservice\windows\Scripts\python.exe deployment\scripts\env_inventory.py --write`) |
 | A route, a request or response field, an event, a status code or an error | [docs/api/api.md](docs/api/api.md), the endpoints of [README.md](README.md), [docs/requirements/requirements.md](docs/requirements/requirements.md), and `contracts` first (`stream/schemas.py`, then bump and re-bundle the wheel) |
 | Logging, probes, shutdown, tracing, files on disk | [docs/operations/monitoring.md](docs/operations/monitoring.md) |
 | A requirement (new, changed, done) | [docs/requirements/requirements.md](docs/requirements/requirements.md) (status and where) and the status table of [README.md](README.md) |
-| A decision, an override, an answer of the maintainer | an ADR in `docs/decisions/` (new, or a dated update of the one it changes) and the requirement it touches |
+| A decision, an override, an answer of the maintainer | an ADR in `docs/decisions/` (new, or a dated update of the one it changes), [docs/setup/13_decisions-and-overrides.md](docs/setup/13_decisions-and-overrides.md), the *Resolution* of the task, the question in `docs/setup/questionnaires/` (the answer after `A:`, and its row in `00_README.md`) and the requirement it touches |
 | A proposal that was accepted, built or dropped | its status line in `docs/proposals/` (keep the body as history, add a dated note) and the requirement it names |
-| A risk, a limit, a known debt | the *Known issues and debt* of the architecture document and the *Known limitations* of [README.md](README.md) |
+| A risk, a limit, a known debt | [docs/setup/14_risks-and-debt.md](docs/setup/14_risks-and-debt.md), the *Known issues and debt* of the architecture document and the *Known limitations* of [README.md](README.md) |
+| What the project is, its counts or its context (purpose, scope, external services, technology, versions) | the matching file of [docs/setup/](docs/setup/00_README.md) (01 to 12) and [README.md](README.md) |
 | Access, secrets, dependencies, what is captured or exposed | [docs/security/security.md](docs/security/security.md) |
 | How it starts, its readiness, its requirements files or the supported platforms | [docs/deployment/deployment.md](docs/deployment/deployment.md) and the deployment tool's catalogue and manual (outside this repository) |
 | The bundled `contracts` version | `requirements.*.txt`, `vendor/`, the **Rules** below, [README.md](README.md) status table and [docs/requirements/requirements.md](docs/requirements/requirements.md) NFR-6 |
@@ -48,6 +50,9 @@ Brain calls `POST /start`, reads `GET /stream` (NDJSON: `stream_started`, one `u
 - Logging only through `shared_logging`; never log audio.
 - Gotcha: `.env.staging` and `.env.production` exist next to `.env`. Do not open or copy them.
 - `.engram/` and `docs/old/` are stale. `docs/architecture/PYTHON_MIGRATION_PLAN.md` is a historical plan that was executed. `docs/deployment_audit/microphone.md` is an audit made from the deployment side (2026-11-04) and the source of PR-001 and PR-002.
+- **Tasks:** follow [docs/tasks/ORDER.md](docs/tasks/ORDER.md) and the protocol of [docs/tasks/README.md](docs/tasks/README.md) section 2: the first `todo` task whose dependencies are done; create or change only the files the task lists (update the task first if you need another); a decision that is `awaiting-user` stops the chain (the questions are in `docs/setup/questionnaires/Q01_open-questions.md`); a task that needs hardware is not done by unit tests (T-04: ask the maintainer).
+- Never invent an answer that only the maintainer can give: write `UNKNOWN`, or add a question to `docs/setup/questionnaires/`.
+- Code, comments and documents are in English.
 - Do not commit or push unless asked.
 
 ## Commands

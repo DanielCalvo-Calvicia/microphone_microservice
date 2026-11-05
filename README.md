@@ -20,8 +20,9 @@ Working on Windows, **needs a retest on real hardware** after the last changes (
 | Utterance cutting and its treatments (DC offset, smoothing, noise floor, resample) | Implemented (ADR-003); defaults not tuned on real rooms |
 | Routes `/start`, `/stream`, `/stop`, `/available`, `/health` | Implemented |
 | Wire format: `contracts.stream` NDJSON events and the `ApiEnvelope` | Implemented; `contracts` 0.15.0 bundled in `vendor/` |
-| Simulated capture backend (a machine without a microphone) | Planned ([PR-001](docs/proposals/PR-001-simulated-capture-backend.md)) |
-| `.env` loading, runtime and dev requirements split | Planned ([PR-002](docs/proposals/PR-002-dotenv-and-requirements-split.md)) |
+| Simulated capture backend (a machine without a microphone) | Planned ([PR-001](docs/proposals/PR-001-simulated-capture-backend.md), epic T-02; its first task waits for the maintainer's decisions, Q01-1 to Q01-3) |
+| `.env` loading, runtime and dev requirements split | Planned ([PR-002](docs/proposals/PR-002-dotenv-and-requirements-split.md), epic T-03; T-03.2, the requirements split, is the next task) |
+| Hardware verification: a real microphone, Linux / Raspberry Pi, Docker | Not done; needs the maintainer (epic T-04) |
 | Authentication | Not designed (project-wide, ADR-005) |
 
 ## Requirements
@@ -138,7 +139,9 @@ Dependencies point inward only (`infrastructure -> application -> domain`); `tes
 | [docs/requirements/requirements.md](docs/requirements/requirements.md) | Requirements and their status |
 | [docs/security/security.md](docs/security/security.md) | Access, privacy, secrets, supply chain |
 | [docs/deployment/deployment.md](docs/deployment/deployment.md) | How the deployment tool runs it; Windows, Linux, Docker |
-| [docs/decisions/](docs/decisions/) | Architecture decision records (ADR-001 to ADR-005) |
+| [docs/tasks/README.md](docs/tasks/README.md) | Task plan; [docs/tasks/ORDER.md](docs/tasks/ORDER.md) is the order to follow, with the state and the last update of every task |
+| [docs/setup/00_README.md](docs/setup/00_README.md) | The project context in 17 sub-forms, and the [questions for the maintainer](docs/setup/questionnaires/Q01_open-questions.md) |
+| [docs/decisions/](docs/decisions/) | Architecture decision records (ADR-001 to ADR-006) |
 | [docs/proposals/](docs/proposals/) | Changes proposed and not built (PR-001, PR-002) |
 | [docs/README.md](docs/README.md) | Index of the documentation, including the history (`architecture/PYTHON_MIGRATION_PLAN.md`, `old/`) |
 | [CLAUDE.md](CLAUDE.md) | Rules for working in the repository, including the mandatory update of the documentation with every change |

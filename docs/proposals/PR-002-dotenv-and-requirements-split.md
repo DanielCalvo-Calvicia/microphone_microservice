@@ -1,6 +1,6 @@
 # PR-002 — Load `.env` and split the requirements
 
-**Status:** Proposed, not built (source: the deployment audit of 2026-11-04; requirement FR-16)
+**Status:** Proposed, not built (source: the deployment audit of 2026-11-04; requirement FR-16). Planned as epic [T-03](../tasks/T-03_startup-configuration/T-03_startup-configuration.md): the requirements split (T-03.2) needs no decision; loading `.env` (T-03.1) waits for the maintainer's answer about `deployment` ([Q01](../setup/questionnaires/Q01_open-questions.md) 4).
 
 ## Problem
 `main_flow/http.py` never loads `.env` (no `python-dotenv`), so the catalogue has `dotenv = false` and the deployment tool has a special path for it. The requirements files list `ruff`, `black`, `mypy`, `pytest` and `httpx` next to the runtime packages, and nothing is pinned.
