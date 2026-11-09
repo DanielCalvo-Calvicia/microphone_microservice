@@ -50,6 +50,7 @@ def test_every_treatment_of_the_input_comes_from_its_own_environment_variable():
             "MICROPHONE_VOLUME_SMOOTHING_FACTOR": "0.25",
             "MICROPHONE_NOISE_FLOOR_TRACKING": "0",
             "MICROPHONE_RESAMPLE_TO_HZ": "16000",
+            "MICROPHONE_PREROLL_SECONDS": "0.5",
         }
     )
 
@@ -62,6 +63,7 @@ def test_every_treatment_of_the_input_comes_from_its_own_environment_variable():
         volume_smoothing_factor=0.25,
         noise_floor_tracking=False,
         resample_to_hz=16000,
+        preroll_seconds=0.5,
     )
 
 
@@ -78,3 +80,12 @@ def test_an_out_of_range_treatment_is_refused_at_startup():
 
     with pytest.raises(InvalidInputTreatment):
         MicrophoneConfig.from_env({"MICROPHONE_SILENCE_LIMIT_SECONDS": "0"})
+
+
+def test_a_negative_pre_roll_is_refused_at_startup():
+    import pytest
+
+    from domain.errors import InvalidInputTreatment
+
+    with pytest.raises(InvalidInputTreatment):
+        MicrophoneConfig.from_env({"MICROPHONE_PREROLL_SECONDS": "-0.1"})

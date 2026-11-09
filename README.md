@@ -17,7 +17,7 @@ Working on Windows, **needs a retest on real hardware** after the last changes (
 |---|---|
 | Capture from the input device, format negotiation, downmix to mono | Implemented; tested against a fake driver, hardware pending |
 | Device choice by name keywords, else the OS default input | Implemented |
-| Utterance cutting and its treatments (DC offset, smoothing, noise floor, resample) | Implemented (ADR-003); defaults not tuned on real rooms |
+| Utterance cutting and its treatments (DC offset, smoothing, noise floor, resample, pre-roll) | Implemented (ADR-003); defaults not tuned on real rooms; the pre-roll (2026-11-09) is tested with fake audio and one offline recording of the stt diagnosis, not on this service with a real microphone |
 | Routes `/start`, `/stream`, `/stop`, `/available`, `/health` | Implemented |
 | Wire format: `contracts.stream` NDJSON events and the `ApiEnvelope` | Implemented; `contracts` 0.15.0 bundled in `vendor/` |
 | Simulated capture backend (a machine without a microphone) | Planned ([PR-001](docs/proposals/PR-001-simulated-capture-backend.md), epic T-02; its first task waits for the maintainer's decisions, Q01-1 to Q01-3) |
@@ -60,6 +60,7 @@ Full table with the rules of each value: [docs/configuration/environment-variabl
 | `MICROPHONE_VOLUME_SMOOTHING` / `MICROPHONE_VOLUME_SMOOTHING_FACTOR` | `true` / `0.1` | Measure a smoothed volume (weight of the newest chunk, above 0 up to 1) so one click is not speech |
 | `MICROPHONE_NOISE_FLOOR_TRACKING` | `true` | Raise the thresholds above the quietest volume heard (speech over 3 x it, silence under 2 x it) |
 | `MICROPHONE_RESAMPLE_TO_HZ` | `0` | Rate of the audio sent on (linear interpolation); `0` = the device's rate, `16000` = what Whisper uses |
+| `MICROPHONE_PREROLL_SECONDS` | `0.2` | Audio heard just before the volume reached the start volume, put in front of each utterance (whole chunks, at least this long) so the first sounds of the first word are not lost; `0` = off |
 
 `LOG_FORMAT`, `LOG_OUTPUT`, `ENVIRONMENT` and `TRACE_EXPORT_*` are also read by the shared logging package, not by this service: see [`shared-logging/docs/logging.md`](../shared-logging/docs/logging.md). `.env.example` lists the 15 variables above, the same as `ServerConfig` / `MicrophoneConfig` in `infrastructure/config/`.
 
@@ -95,7 +96,7 @@ windows\Scripts\python.exe -m mypy .
 windows\Scripts\python.exe tests\simple.py  # end to end, needs a real microphone
 ```
 
-Result on 2026-11-05: `127 passed` in 2.4 s, ruff `All checks passed!`, mypy `no issues found in 53 source files`. `tests/simple.py` and the sounddevice adapter on real hardware were not run (they need a microphone). `black` is configured in `pyproject.toml` and listed in the requirements; it was not run.
+Result on 2026-11-09: `142 passed` in 2.1 s, ruff `All checks passed!`, mypy `no issues found in 53 source files` (127 passed on 2026-11-05, before the pre-roll). `tests/simple.py` and the sounddevice adapter on real hardware were not run (they need a microphone). `black` is configured in `pyproject.toml` and listed in the requirements; it was not run.
 
 ## Project layout
 

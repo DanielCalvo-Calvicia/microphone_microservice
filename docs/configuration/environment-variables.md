@@ -36,6 +36,7 @@ The cutting is **always on**; each treatment can be switched on or off. Volume i
 | `MICROPHONE_VOLUME_SMOOTHING` | `true` | flag | Measure a smoothed volume so one click is not speech |
 | `MICROPHONE_VOLUME_SMOOTHING_FACTOR` | `0.1` | above 0, up to 1 | Weight of the newest chunk in the smoothed volume |
 | `MICROPHONE_NOISE_FLOOR_TRACKING` | `true` | flag | Raise the thresholds above the quietest volume heard (speech over 3 x it, silence under 2 x it). Turn it off in a very quiet room whose floor stays too high |
+| `MICROPHONE_PREROLL_SECONDS` | `0.2` | 0 or more | Seconds of audio heard just before the volume reached the start volume, put in front of each utterance (kept in whole chunks, so at least this long; about 0.26 s at 16 kHz and 1024-sample chunks). Without it the first sounds of the first word are lost (the volume needs a moment to reach the start volume, more with smoothing) and a speech-to-text engine misses the word, as the wake-phrase gate of stt did. `0` = off. Costs no CPU and a few KB of memory |
 | `MICROPHONE_RESAMPLE_TO_HZ` | `0` | 0 or more (integer) | Rate of the audio sent on (linear interpolation, in the microphone's CPU); `0` = the device's rate; `16000` is what Whisper uses and sends less data. `/start` and `X-Sample-Rate` report this rate |
 
 ## Read by other packages, not by this service

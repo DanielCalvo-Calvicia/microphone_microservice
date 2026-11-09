@@ -1,5 +1,6 @@
 import math
 from array import array
+from collections import deque
 
 from domain.operations.level import mean, rms, samples_of
 from domain.operations.resample import LinearResampler
@@ -15,8 +16,10 @@ class UtteranceSegmenter:
 
     Feed it the chunks as they are captured; it hands back each utterance when the silence that
     ends it has lasted ``silence_limit_seconds``. An utterance starts when the volume reaches the
-    start threshold and keeps the silence that ended it. Which treatments measure the volume is
-    ``InputTreatment``'s business.
+    start threshold and keeps the silence that ended it. The volume takes a moment to reach the
+    start threshold (more with smoothing), so the chunks heard just before it are kept and put in
+    front of the utterance (``preroll_seconds``): otherwise the first sounds of the first word are
+    lost. Which treatments measure the volume is ``InputTreatment``'s business.
     """
 
     def __init__(self, treatment: InputTreatment, sample_rate: int) -> None:
@@ -36,6 +39,10 @@ class UtteranceSegmenter:
         self._speaking = False
         self._silent_samples = 0
         self._utterance = bytearray()
+        self._preroll_samples = math.ceil(treatment.preroll_seconds * sample_rate)
+        # the latest chunks heard before an utterance, with their sample counts
+        self._recent: deque[tuple[bytes, int]] = deque()
+        self._recent_samples = 0
 
     @property
     def output_sample_rate(self) -> int:
@@ -56,10 +63,14 @@ class UtteranceSegmenter:
         if not self._speaking and volume >= start:
             self._speaking = True
             self._silent_samples = 0
+            for earlier, _ in self._recent:
+                self._take(earlier)
+            self._recent.clear()
+            self._recent_samples = 0
         if not self._speaking:
+            self._remember(chunk, len(samples))
             return []
-        resampler = self._resampler
-        self._utterance.extend(resampler.process(chunk) if resampler is not None else chunk)
+        self._take(chunk)
         self._silent_samples = self._silent_samples + len(samples) if volume < end else 0
         if self._silent_samples >= self._limit_samples:
             return [self._finish()]
@@ -68,6 +79,21 @@ class UtteranceSegmenter:
     def flush(self) -> bytes | None:
         """The stream ended: the utterance in progress, if any."""
         return self._finish() if self._speaking else None
+
+    def _take(self, chunk: bytes) -> None:
+        """Adds a chunk to the utterance, resampled when it is asked to be."""
+        resampler = self._resampler
+        self._utterance.extend(resampler.process(chunk) if resampler is not None else chunk)
+
+    def _remember(self, chunk: bytes, samples: int) -> None:
+        """Keeps the latest chunks heard before an utterance: ``preroll_seconds`` or more."""
+        if self._preroll_samples == 0:
+            return
+        self._recent.append((chunk, samples))
+        self._recent_samples += samples
+        while self._recent_samples - self._recent[0][1] >= self._preroll_samples:
+            _, dropped = self._recent.popleft()
+            self._recent_samples -= dropped
 
     def _measure(self, samples: "array[int]") -> int:
         treatment = self._treatment

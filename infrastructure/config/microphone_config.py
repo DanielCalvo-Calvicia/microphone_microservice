@@ -58,4 +58,5 @@ class MicrophoneConfig:
                 env, "MICROPHONE_NOISE_FLOOR_TRACKING", defaults.noise_floor_tracking
             ),
             resample_to_hz=int(number("MICROPHONE_RESAMPLE_TO_HZ", defaults.resample_to_hz)),
+            preroll_seconds=number("MICROPHONE_PREROLL_SECONDS", defaults.preroll_seconds),
         )

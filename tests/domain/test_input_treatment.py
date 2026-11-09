@@ -10,6 +10,7 @@ def test_the_defaults_are_the_cutting_the_openai_engine_of_stt_used_to_do():
     assert (treatment.silence_threshold, treatment.silence_limit_seconds, treatment.speech_start_factor) == (150, 2.0, 2.0)
     assert (treatment.volume_smoothing, treatment.noise_floor_tracking) == (True, True)
     assert (treatment.dc_offset_removal, treatment.resample_to_hz) == (False, 0)
+    assert treatment.preroll_seconds == 0.2  # the first sounds of the first word are kept (the wake phrase gate needs them)
 
 
 @pytest.mark.parametrize(
@@ -22,6 +23,7 @@ def test_the_defaults_are_the_cutting_the_openai_engine_of_stt_used_to_do():
         {"volume_smoothing_factor": 0},
         {"volume_smoothing_factor": 1.5},
         {"resample_to_hz": -16000},
+        {"preroll_seconds": -0.01},
     ],
 )
 def test_out_of_range_settings_are_refused(bad):

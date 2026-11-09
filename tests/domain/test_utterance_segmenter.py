@@ -26,6 +26,7 @@ def _treatment(**overrides) -> InputTreatment:
         "volume_smoothing": False,
         "noise_floor_tracking": False,
         "dc_offset_removal": False,
+        "preroll_seconds": 0.0,
     }
     settings.update(overrides)
     return InputTreatment(**settings)
@@ -154,3 +155,137 @@ def test_resampling_to_the_rate_it_already_has_does_nothing():
 def test_a_rate_that_is_not_positive_is_refused():
     with pytest.raises(ValueError):
         UtteranceSegmenter(_treatment(), 0)
+
+
+# --------------------------------------------------------------------------- pre-roll: the chunks heard before the utterance starts
+
+
+def _numbered(n: int) -> bytes:
+    """A quiet chunk of its own value, so a test can tell which chunks came out."""
+    return array("h", [n] * CHUNK).tobytes()
+
+
+def test_the_pre_roll_is_put_in_front_of_the_utterance():
+    segmenter = UtteranceSegmenter(_treatment(preroll_seconds=0.1), RATE)  # 0.1 s = two chunks of 50 samples
+    loud = _tone(1000)
+    before = [_numbered(n) for n in (1, 2, 3, 4)]
+
+    out = _feed(segmenter, *before, loud, SILENCE, SILENCE)
+
+    assert out == [before[2] + before[3] + loud + SILENCE * 2]  # only the last two quiet chunks: the pre-roll, not the whole past
+
+
+def test_with_no_pre_roll_the_utterance_starts_at_the_chunk_that_reached_the_start_volume():
+    segmenter = UtteranceSegmenter(_treatment(preroll_seconds=0.0), RATE)
+    loud = _tone(1000)
+
+    assert _feed(segmenter, _numbered(1), _numbered(2), loud, SILENCE, SILENCE) == [loud + SILENCE * 2]
+
+
+def test_the_pre_roll_is_whole_chunks_and_at_least_the_time_asked():
+    # 0.06 s = 60 samples: one chunk (50) is not enough, so two are kept
+    segmenter = UtteranceSegmenter(_treatment(preroll_seconds=0.06), RATE)
+    loud = _tone(1000)
+    before = [_numbered(n) for n in (1, 2, 3)]
+
+    out = _feed(segmenter, *before, loud, SILENCE, SILENCE)
+
+    assert out == [before[1] + before[2] + loud + SILENCE * 2]
+
+
+def test_a_short_past_gives_a_short_pre_roll():
+    segmenter = UtteranceSegmenter(_treatment(preroll_seconds=0.5), RATE)  # ten chunks wanted, only one has been heard
+    loud = _tone(1000)
+
+    assert _feed(segmenter, _numbered(1), loud, SILENCE, SILENCE) == [_numbered(1) + loud + SILENCE * 2]
+
+
+def test_the_silence_that_ended_an_utterance_is_not_the_pre_roll_of_the_next_one():
+    segmenter = UtteranceSegmenter(_treatment(preroll_seconds=0.1), RATE)
+    first, second = _tone(1000), _tone(2000)
+
+    out = _feed(segmenter, first, SILENCE, SILENCE, second, SILENCE, SILENCE)
+
+    assert out == [first + SILENCE * 2, second + SILENCE * 2]  # nothing was heard between them, so nothing is prepended
+
+
+def test_the_quiet_between_two_utterances_is_what_pre_rolls_the_second():
+    segmenter = UtteranceSegmenter(_treatment(preroll_seconds=0.05), RATE)
+    first, second = _tone(1000), _tone(2000)
+    gap = _numbered(7)
+
+    out = _feed(segmenter, first, SILENCE, SILENCE, gap, gap, second, SILENCE, SILENCE)
+
+    assert out == [first + SILENCE * 2, gap + second + SILENCE * 2]  # the last quiet chunk before the second utterance, once
+
+
+def test_the_pre_roll_buffer_does_not_grow_with_a_long_quiet():
+    segmenter = UtteranceSegmenter(_treatment(preroll_seconds=0.1), RATE)
+
+    _feed(segmenter, *[_numbered(n % 90) for n in range(10_000)])
+
+    assert len(segmenter._recent) == 2  # noqa: SLF001 - the bound is the point: two chunks of 50 samples cover 0.1 s
+    assert segmenter._recent_samples == 2 * CHUNK  # noqa: SLF001
+
+
+def test_a_late_start_caused_by_smoothing_is_covered_by_the_pre_roll():
+    # smoothed with the weight 0.1 a loud voice needs several chunks to reach the start volume; those chunks must not be lost
+    voice = _tone(3000)
+    smoothing = {"volume_smoothing": True, "volume_smoothing_factor": 0.1}
+    without = UtteranceSegmenter(_treatment(preroll_seconds=0.0, **smoothing), RATE)
+    with_pre_roll = UtteranceSegmenter(_treatment(preroll_seconds=0.25, **smoothing), RATE)
+    chunks = [SILENCE, SILENCE, SILENCE, SILENCE, SILENCE] + [voice] * 12 + [SILENCE] * 80
+
+    out_without, out_with = _feed(without, *chunks), _feed(with_pre_roll, *chunks)
+
+    assert len(out_without) == len(out_with) == 1
+    assert len(out_with[0]) > len(out_without[0])  # the pre-roll added audio
+    assert out_with[0].endswith(out_without[0])  # ... in front, and nothing else changed
+    first_voice = out_with[0].index(voice[:8])
+    assert first_voice >= 0  # the whole voice is in the utterance, with quiet chunks before it
+
+
+def test_the_pre_roll_is_resampled_with_the_utterance():
+    segmenter = UtteranceSegmenter(_treatment(resample_to_hz=500, preroll_seconds=0.05), RATE)  # one chunk of pre-roll
+    loud = _tone(1000)
+
+    out = _feed(segmenter, _numbered(5), loud, SILENCE, SILENCE)
+
+    assert len(samples_of(out[0])) == pytest.approx(4 * CHUNK / 2, abs=2)  # pre-roll + loud + two silent chunks, halved
+
+
+def test_the_stream_ending_mid_utterance_hands_over_the_pre_roll_too():
+    segmenter = UtteranceSegmenter(_treatment(preroll_seconds=0.05), RATE)
+    loud = _tone(1000)
+
+    _feed(segmenter, _numbered(3), _numbered(4), loud)
+
+    assert segmenter.flush() == _numbered(4) + loud
+
+
+def test_a_pre_roll_does_not_make_silence_an_utterance():
+    segmenter = UtteranceSegmenter(_treatment(preroll_seconds=1.0), RATE)
+
+    assert _feed(segmenter, *[SILENCE] * 50) == []
+    assert segmenter.flush() is None
+
+
+def test_a_fraction_of_a_sample_of_pre_roll_rounds_up():
+    # 0.0505 s at 1000 Hz is 50.5 samples: one chunk of 50 is short of it, so two are kept
+    segmenter = UtteranceSegmenter(_treatment(preroll_seconds=0.0505), RATE)
+    loud = _tone(1000)
+    before = [_numbered(n) for n in (1, 2, 3)]
+
+    out = _feed(segmenter, *before, loud, SILENCE, SILENCE)
+
+    assert out == [before[1] + before[2] + loud + SILENCE * 2]
+
+
+def test_chunks_heard_before_one_utterance_never_leak_into_the_next_one():
+    segmenter = UtteranceSegmenter(_treatment(preroll_seconds=0.05), RATE)
+    first, second = _tone(1000), _tone(2000)
+    x, y = _numbered(3), _numbered(4)
+
+    out = _feed(segmenter, x, first, SILENCE, SILENCE, y, second, SILENCE, SILENCE)
+
+    assert out == [x + first + SILENCE * 2, y + second + SILENCE * 2]

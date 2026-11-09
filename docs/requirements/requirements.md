@@ -20,7 +20,7 @@ Sources: `../CLAUDE.md` (the rules of the workspace), the contracts in `contract
 
 | ID | Requirement | Status | Where / record |
 |---|---|---|---|
-| FR-8 | Cut the capture into utterances: one starts when the volume reaches `silence_threshold x speech_start_factor`, ends after `silence_limit_seconds` below `silence_threshold`, and keeps the silence that ended it. The utterance in progress is sent when the capture is closed and lost if the device fails. The cutting is always on. | Done | `domain/entities/utterance_segmenter.py`, ADR-003 |
+| FR-8 | Cut the capture into utterances: one starts when the volume reaches `silence_threshold x speech_start_factor`, ends after `silence_limit_seconds` below `silence_threshold`, and keeps the silence that ended it; the audio heard just before the start (`preroll_seconds`, default 0.2 s, in whole chunks) is put in front of it. The utterance in progress is sent when the capture is closed and lost if the device fails. The cutting is always on. | Done | `domain/entities/utterance_segmenter.py`, ADR-003 |
 | FR-9 | Each treatment has its own variable: DC offset removal, volume smoothing (and its factor), noise-floor tracking (speech over 3 x the floor, silence under 2 x), and the `MICROPHONE_SILENCE_*` and `MICROPHONE_SPEECH_START_FACTOR` thresholds; invalid values stop the start. | Done | `input_treatment.py`, `microphone_config.py`, `docs/configuration/environment-variables.md` |
 | FR-10 | Optionally resample what is sent (`MICROPHONE_RESAMPLE_TO_HZ`, linear interpolation, chunk boundaries do not change the output); `/start` and `X-Sample-Rate` report the rate sent. | Done | `domain/operations/resample.py` |
 
@@ -50,6 +50,6 @@ Sources: `../CLAUDE.md` (the rules of the workspace), the contracts in `contract
 | NFR-4 | Audio stays PCM16 mono; the only conversions are the downmix of what the device delivers and the optional resample. | Done | FR-4, FR-10 |
 | NFR-5 | Blocking device calls run off the event loop. | Done, hardware pending | `asyncio.to_thread` in the adapter |
 | NFR-6 | Wire types come from `contracts` (bundled wheel in `vendor/`, refreshed with `contracts/scripts/bundle.py`, currently 0.15.0). | Done | `vendor/`, `requirements.*.txt` |
-| NFR-7 | `ruff` and `mypy` (strict) clean; tests need no hardware. | Done | `pyproject.toml`; 127 tests |
+| NFR-7 | `ruff` and `mypy` (strict) clean; tests need no hardware. | Done | `pyproject.toml`; 142 tests |
 | NFR-8 | Runs on Windows and on Linux / Raspberry Pi (`requirements.linux.txt`). | Windows works; Linux not run on real hardware | `docs/deployment/deployment.md` |
 | NFR-9 | Authentication between services. | Not designed (project-wide) | ADR-005, `docs/security/security.md` |

@@ -119,7 +119,7 @@ The HTTP routes are documented in `docs/api/api.md`.
 ## 7. Data structures
 
 - `AudioFormat` (frozen): `sample_rate`, `channels`, `chunk_size`, all above 0 or `InvalidAudioFormat`.
-- `InputTreatment` (frozen): `silence_threshold` 150, `silence_limit_seconds` 2.0, `speech_start_factor` 2.0, `dc_offset_removal` false, `volume_smoothing` true, `volume_smoothing_factor` 0.1, `noise_floor_tracking` true, `resample_to_hz` 0; out of range values raise `InvalidInputTreatment`.
+- `InputTreatment` (frozen): `silence_threshold` 150, `silence_limit_seconds` 2.0, `speech_start_factor` 2.0, `dc_offset_removal` false, `volume_smoothing` true, `volume_smoothing_factor` 0.1, `noise_floor_tracking` true, `resample_to_hz` 0, `preroll_seconds` 0.2; out of range values raise `InvalidInputTreatment`.
 - `StreamOutboundDTO(sample_rate, stream)`: the live utterance stream and the rate of its audio.
 - Events (`contracts.stream.microservices.microphone.outbound`): `MicrophoneStreamStartedEvent`, `MicrophoneUtteranceEvent`, `MicrophoneCompletedOutboundEvent`, plus the common `ErrorEvent`. Control payloads: `contracts.api.microservices.microphone` (`start`, `stop`) and `common` (`availability`, `health_check`).
 
@@ -129,7 +129,7 @@ The HTTP routes are documented in `docs/api/api.md`.
 
 1. **Volume**: RMS of the 16-bit samples. With `dc_offset_removal` the slowly moving offset (95 % old value, 5 % of each chunk mean) is subtracted first. With `volume_smoothing` the volume is an exponential average (`volume_smoothing_factor` is the weight of the newest chunk), so one click is not speech. With `noise_floor_tracking` the quietest non-zero raw volume heard is remembered.
 2. **Thresholds**: speech starts at `silence_threshold x speech_start_factor`, silence is under `silence_threshold`. With the noise floor, they are raised to at least 3 x the floor (start) and 2 x the floor (end).
-3. **Speaking**: starts when the volume reaches the start threshold; every chunk of the utterance is kept (resampled when `resample_to_hz` differs from the device rate); consecutive samples under the end threshold are counted and when they reach `silence_limit_seconds` the utterance is handed back (it keeps the silence that ended it).
+3. **Speaking**: starts when the volume reaches the start threshold, and the **pre-roll** is put in front first (the latest quiet chunks, kept in a small rolling buffer while idle: whole chunks, at least `preroll_seconds`; nothing is buffered while an utterance is in progress, so the buffer never leaks into the next utterance); every chunk of the utterance is kept (resampled when `resample_to_hz` differs from the device rate); consecutive samples under the end threshold are counted and when they reach `silence_limit_seconds` the utterance is handed back (it keeps the silence that ended it).
 4. **End of stream**: `flush()` hands back the utterance in progress. If the device fails instead, the half utterance is lost.
 
 ## 9. Design patterns

@@ -27,6 +27,13 @@ class InputTreatment:
         not count as speech.
       * ``resample_to_hz``: the rate of the audio sent on (linear interpolation); 0 = keep the
         device rate.
+
+    Start of an utterance:
+      * ``preroll_seconds``: how much of the audio heard *before* the volume reached the start
+        volume is put in front of the utterance (whole chunks, at least this many seconds). The
+        volume needs a moment to reach the start volume, so without it the first sounds of the
+        first word are lost, and a speech-to-text engine then misses the word (the wake phrase
+        gate heard "What time is it?" for "Oblivion 306, what time is it?"). 0 = off.
     """
 
     silence_threshold: int = 150
@@ -37,6 +44,7 @@ class InputTreatment:
     volume_smoothing_factor: float = 0.1
     noise_floor_tracking: bool = True
     resample_to_hz: int = 0
+    preroll_seconds: float = 0.2
 
     def __post_init__(self) -> None:
         if self.silence_threshold < 0:
@@ -51,3 +59,5 @@ class InputTreatment:
             )
         if self.resample_to_hz < 0:
             raise InvalidInputTreatment("resample_to_hz must not be negative")
+        if self.preroll_seconds < 0:
+            raise InvalidInputTreatment("preroll_seconds must not be negative")

@@ -14,7 +14,7 @@
 | Value object | Rules |
 |---|---|
 | `AudioFormat(sample_rate, channels, chunk_size)` | Frozen; every field above 0 (`InvalidAudioFormat`); `with_sample_rate`, `with_channels` |
-| `InputTreatment` | Frozen; `silence_threshold` >= 0 (150), `silence_limit_seconds` > 0 (2.0), `speech_start_factor` >= 1 (2.0), `dc_offset_removal` (false), `volume_smoothing` (true), `volume_smoothing_factor` in (0, 1] (0.1), `noise_floor_tracking` (true), `resample_to_hz` >= 0 (0) (`InvalidInputTreatment`) |
+| `InputTreatment` | Frozen; `silence_threshold` >= 0 (150), `silence_limit_seconds` > 0 (2.0), `speech_start_factor` >= 1 (2.0), `dc_offset_removal` (false), `volume_smoothing` (true), `volume_smoothing_factor` in (0, 1] (0.1), `noise_floor_tracking` (true), `resample_to_hz` >= 0 (0), `preroll_seconds` >= 0 (0.2) (`InvalidInputTreatment`) |
 
 ## Operations (pure functions)
 
