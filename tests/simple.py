@@ -1,8 +1,11 @@
 """
 End-to-end integration test for the Microphone Microservice.
 
-This script boots the real FastAPI app, exercises the public HTTP API, and
-shuts the server down gracefully.
+This test is fully self-contained:
+    1. Boots the server (composition root → FastAPI → Uvicorn)
+    2. Waits for it to be healthy
+    3. Runs the full API flow
+    4. Shuts the server down gracefully
 
 Usage:
     python tests/simple.py
@@ -10,245 +13,206 @@ Usage:
 
 import asyncio
 import base64
-import json
-import socket
 import sys
 import time
-from datetime import datetime
 from pathlib import Path
 
-if hasattr(sys.stdout, "reconfigure"):
-    sys.stdout.reconfigure(errors="replace")
-if hasattr(sys.stderr, "reconfigure"):
-    sys.stderr.reconfigure(errors="replace")
-
+# ── Ensure project root is on sys.path ──────────────────
 repo_root = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(repo_root))
 
 import httpx
 import uvicorn
+from contracts.stream.codec import NdjsonDecoder
+from contracts.stream.common.base import EventType
+from contracts.stream.schemas import MICROPHONE_OUTBOUND
 
-from composition_root.containers.container import BuildContainer
+from composition_root.containers.http_container import new_http_container
+from infrastructure.config.microphone_config import MicrophoneConfig
+from infrastructure.config.server_config import ServerConfig
 
-
-def find_free_port() -> int:
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
-        sock.bind(("127.0.0.1", 0))
-        return int(sock.getsockname()[1])
-
-
+# ── Configuration ───────────────────────────────────────
 HOST = "127.0.0.1"
-PORT = find_free_port()
+PORT = 8000
 BASE_URL = f"http://{HOST}:{PORT}"
-STREAM_READ_SECONDS = 4
-STARTUP_TIMEOUT = 10
-STANDARD_EVENT_TYPES = {"stream_started", "partial", "completed", "heartbeat", "error"}
+STREAM_READ_SECONDS = 2  # How long to read audio chunks from each streaming endpoint
+STARTUP_TIMEOUT = 10  # Max seconds to wait for the server to become healthy
+GRACEFUL_SHUTDOWN_SECONDS = 5
+
+
+# ──────────────────────────────────────────────
+# SERVER LIFECYCLE
+# ──────────────────────────────────────────────
 
 
 async def start_server() -> tuple[uvicorn.Server, asyncio.Task]:
-    container = BuildContainer(name="Test Microservice")
-    app = container.microphone_dependency.adapter_inbound.get_app
+    """Boot the microservice exactly like main.py does and return
+    the server instance + its background task."""
 
-    config = uvicorn.Config(app, host=HOST, port=PORT, log_level="warning")
+    container = new_http_container(
+        ServerConfig.from_env({"SERVICE_NAME": "Test Microservice"}),
+        MicrophoneConfig.from_env(),
+    )
+    app = container.app
+
+    config = uvicorn.Config(
+        app,
+        host=HOST,
+        port=PORT,
+        log_level="warning",
+        timeout_graceful_shutdown=GRACEFUL_SHUTDOWN_SECONDS,  # like main.py: a leftover stream must not hang the stop
+    )
     server = uvicorn.Server(config)
+
     task = asyncio.create_task(server.serve())
 
+    # Wait until the server is accepting connections
     async with httpx.AsyncClient(timeout=2.0) as client:
         deadline = time.monotonic() + STARTUP_TIMEOUT
         while time.monotonic() < deadline:
             try:
                 resp = await client.get(f"{BASE_URL}/health")
                 if resp.status_code == 200:
-                    return server, task
+                    break
             except httpx.ConnectError:
                 pass
             await asyncio.sleep(0.2)
+        else:
+            raise RuntimeError(f"Server did not become healthy within {STARTUP_TIMEOUT}s")
 
-    raise RuntimeError(f"Server did not become healthy within {STARTUP_TIMEOUT}s")
+    return server, task
 
 
 async def stop_server(server: uvicorn.Server, task: asyncio.Task) -> None:
+    """Signal the server to shut down and wait for the task to finish."""
     server.should_exit = True
     await task
 
 
+# ──────────────────────────────────────────────
+# HELPERS
+# ──────────────────────────────────────────────
+
+
 def print_header(title: str) -> None:
-    print(f"\n{'-' * 50}")
+    print(f"\n{'─'*50}")
     print(f"  {title}")
-    print(f"{'-' * 50}")
+    print(f"{'─'*50}")
 
 
 def print_result(label: str, success: bool, detail: str = "") -> None:
-    status = "OK" if success else "FAIL"
-    message = f"  {status} {label}"
+    icon = "✅" if success else "❌"
+    msg = f"  {icon} {label}"
     if detail:
-        message += f" -> {detail}"
-    print(message)
+        msg += f"  →  {detail}"
+    print(msg)
 
 
-def validate_stream_event(event: dict, expected_sequence: int) -> None:
-    if set(event) != {"type", "sequence", "timestamp", "payload"}:
-        raise ValueError(f"Invalid stream event fields: {event}")
-    if event["type"] not in STANDARD_EVENT_TYPES:
-        raise ValueError(f"Unsupported stream event type: {event['type']}")
-    if event["sequence"] != expected_sequence:
-        raise ValueError(f"Expected sequence {expected_sequence}, got {event['sequence']}")
-    if not isinstance(event["payload"], dict):
-        raise ValueError("Stream event payload must be an object")
-    if not event["timestamp"].endswith("Z"):
-        raise ValueError("Stream event timestamp must be UTC and end with Z")
-    datetime.fromisoformat(event["timestamp"].replace("Z", "+00:00"))
+async def read_stream_for(response: httpx.Response, seconds: float) -> int:
+    """Read the microphone's event stream for a limited duration, validating it against the
+    ``MICROPHONE_OUTBOUND`` contract. Returns the number of events received.
 
-    payload = event["payload"]
-    if event["type"] == "stream_started" and payload != {}:
-        raise ValueError("stream_started payload must be empty")
-    if event["type"] == "partial":
-        if set(payload) != {"bytes_base64"}:
-            raise ValueError("partial audio payload must contain only bytes_base64")
-        base64.b64decode(payload["bytes_base64"], validate=True)
-    if event["type"] == "completed":
-        if set(payload) != {"reason", "output_bytes_base64"}:
-            raise ValueError("completed audio payload must contain reason and output_bytes_base64")
-        if payload.get("reason") != "completed":
-            raise ValueError("completed event reason must be completed")
-        base64.b64decode(payload["output_bytes_base64"], validate=True)
-    if event["type"] == "error":
-        if set(payload) != {"code", "message", "recoverable"}:
-            raise ValueError("error payload must contain code, message, and recoverable")
-
-
-def parse_sse_frame(frame: str) -> dict:
-    lines = frame.splitlines()
-    if len(lines) != 1:
-        raise ValueError(f"SSE frame must contain exactly one data line: {frame!r}")
-    if not lines[0].startswith("data:") or lines[0].startswith("data: "):
-        raise ValueError(f"SSE value must be exactly standard JSON after data:: {frame!r}")
-    return json.loads(lines[0][len("data:"):])
-
-
-async def read_stream_events_for(response: httpx.Response, seconds: float) -> dict:
-    content_type = response.headers.get("content-type", "")
-    is_ndjson = content_type.startswith("application/x-ndjson")
-    is_sse = content_type.startswith("text/event-stream")
-    if not (is_ndjson or is_sse):
-        raise ValueError(f"Unexpected stream content-type: {content_type}")
-
-    events: list[dict] = []
+    The microphone cuts the capture into utterances itself, so the stream carries ``stream_started``
+    and then one ``utterance`` per finished utterance (an utterance ends after the silence limit, so
+    a short read of a quiet room sees only ``stream_started``). It no longer carries raw audio."""
+    events = 0
     deadline = time.monotonic() + seconds
-    line_iter = response.aiter_lines().__aiter__()
-    sse_frame_lines: list[str] = []
+    decoder = NdjsonDecoder(MICROPHONE_OUTBOUND)
 
-    while True:
-        remaining = deadline - time.monotonic()
-        if remaining <= 0:
-            break
-        try:
-            line = await asyncio.wait_for(anext(line_iter), timeout=remaining)
-        except asyncio.TimeoutError:
-            break
-        except StopAsyncIteration:
+    async for chunk in response.aiter_bytes(chunk_size=4096):
+        for event in decoder.feed(chunk):
+            events += 1
+            if event.type is EventType.UTTERANCE:
+                print(f"      utterance of {len(base64.b64decode(event.payload.bytes_base64))} bytes")
+        if time.monotonic() >= deadline:
             break
 
-        if is_sse:
-            if line == "":
-                if sse_frame_lines:
-                    event = parse_sse_frame("\n".join(sse_frame_lines))
-                    events.append(event)
-                    validate_stream_event(event, len(events))
-                    sse_frame_lines = []
-                continue
-            sse_frame_lines.append(line)
-            continue
+    return events
 
-        if not line:
-            continue
-        event = json.loads(line)
-        events.append(event)
-        validate_stream_event(event, len(events))
 
-    if sse_frame_lines:
-        event = parse_sse_frame("\n".join(sse_frame_lines))
-        events.append(event)
-        validate_stream_event(event, len(events))
-
-    event_types = [event["type"] for event in events]
-    if not event_types or event_types[0] != "stream_started":
-        raise ValueError(f"Stream did not begin with stream_started: {event_types}")
-
-    return {
-        "count": len(events),
-        "types": event_types,
-        "partials": event_types.count("partial"),
-        "completed": event_types.count("completed"),
-        "errors": event_types.count("error"),
-    }
+# ──────────────────────────────────────────────
+# TEST STEPS
+# ──────────────────────────────────────────────
 
 
 async def test_health(client: httpx.AsyncClient) -> bool:
-    print_header("1. Health Check -> GET /health")
+    print_header("1. Health Check  →  GET /health")
     resp = await client.get(f"{BASE_URL}/health")
     body = resp.json()
     ok = resp.status_code == 200 and body.get("status") == "success"
-    print_result("Health", ok, f"status={resp.status_code} body={body}")
+    print_result("Health", ok, f"status={resp.status_code}  body={body}")
     return ok
 
 
 async def test_available(client: httpx.AsyncClient, step: str, expected: bool) -> bool:
-    print_header(f"{step}. Availability Check -> GET /available (expect={expected})")
+    print_header(f"{step}. Availability Check  →  GET /available  (expect={expected})")
     resp = await client.get(f"{BASE_URL}/available")
     body = resp.json()
-    actual = body.get("data")
+    actual = (body.get("data") or {}).get("is_available")  # a device probe: true whenever an input device exists
     ok = resp.status_code == 200 and actual == expected
-    print_result("Available", ok, f"expected={expected} actual={actual}")
+    print_result("Available", ok, f"expected={expected}  actual={actual}")
     return ok
 
 
-async def test_start(client: httpx.AsyncClient, *, sse: bool = False) -> bool:
-    label = "Start SSE" if sse else "Start NDJSON"
-    print_header(f"{label} -> POST /start")
-    headers = {"Accept": "text/event-stream"} if sse else None
-    async with client.stream(
-        "POST",
+async def test_start(client: httpx.AsyncClient) -> bool:
+    print_header("3. Start Microphone  →  POST /start  (JSON envelope; the audio is read in step 5)")
+    resp = await client.post(
         f"{BASE_URL}/start",
-        headers=headers,
         json={"sample_rate": 16000, "channels": 1, "chunk_size": 1024},
-    ) as resp:
-        sample_rate = resp.headers.get("x-sample-rate", "?")
-        status_hdr = resp.headers.get("x-status", "?")
-        summary = await read_stream_events_for(resp, STREAM_READ_SECONDS)
-
-    ok = resp.status_code == 200 and summary["count"] > 0 and summary["errors"] == 0
+    )
+    body = resp.json()
+    data = body.get("data") or {}
+    ok = resp.status_code == 200 and body.get("status") == "success" and data.get("sample_rate") == 16000
     print_result(
-        label,
+        "Start",
         ok,
-        f"status={resp.status_code} events={summary['types']} sample_rate={sample_rate} x-status={status_hdr}",
+        f"status={resp.status_code}  sample_rate={data.get('sample_rate')}  "
+        f"channels={data.get('channels')}  encoding={data.get('encoding')}",
     )
     return ok
 
 
-async def test_removed_stream_endpoint(client: httpx.AsyncClient) -> bool:
-    print_header("Removed Stream Endpoint -> GET /stream")
-    resp = await client.get(f"{BASE_URL}/stream")
-    ok = resp.status_code == 404
-    print_result("Removed /stream", ok, f"status={resp.status_code}")
+async def test_stream(client: httpx.AsyncClient) -> bool:
+    print_header("5. Read Existing Stream  →  GET /stream  (streaming response)")
+    async with client.stream("GET", f"{BASE_URL}/stream") as resp:
+        if resp.status_code != 200:
+            body_bytes = await resp.aread()
+            print_result("Stream", False, f"status={resp.status_code}  body={body_bytes.decode()}")
+            return False
+
+        sample_rate = resp.headers.get("x-sample-rate", "?")
+        total = await read_stream_for(resp, STREAM_READ_SECONDS)
+
+    ok = total > 0
+    print_result(
+        "Stream",
+        ok,
+        f"status={resp.status_code}  events={total}  sample_rate={sample_rate}",
+    )
     return ok
 
 
-async def test_stop(client: httpx.AsyncClient, step: str) -> bool:
-    print_header(f"{step}. Stop Microphone -> POST /stop")
+async def test_stop(client: httpx.AsyncClient) -> bool:
+    print_header("6. Stop Microphone  →  POST /stop")
     resp = await client.post(f"{BASE_URL}/stop", json={})
     body = resp.json()
     ok = resp.status_code == 200 and body.get("status") == "success"
-    print_result("Stop", ok, f"status={resp.status_code} body={body}")
+    print_result("Stop", ok, f"status={resp.status_code}  body={body}")
     return ok
+
+
+# ──────────────────────────────────────────────
+# MAIN
+# ──────────────────────────────────────────────
 
 
 async def run_tests() -> None:
     print("\n" + "=" * 50)
-    print("  Microphone Microservice - E2E Test")
+    print("  Microphone Microservice  –  E2E Test")
     print("=" * 50)
 
-    print_header("Starting server...")
+    # ── Boot the server ──
+    print_header("🚀 Starting server...")
     server, server_task = await start_server()
     print_result("Server", True, f"listening on {BASE_URL}")
 
@@ -256,28 +220,41 @@ async def run_tests() -> None:
 
     try:
         async with httpx.AsyncClient(timeout=30.0) as client:
+            # 1. Health
             results.append(await test_health(client))
-            results.append(await test_available(client, "2", expected=False))
-            results.append(await test_start(client, sse=False))
+
+            # 2. Available (a device probe: true whenever an input device exists, started or not)
+            results.append(await test_available(client, "2", expected=True))
+
+            # 3. Start (the JSON envelope of the opened capture)
+            results.append(await test_start(client))
+
+            # 4. Available (true while capturing)
             results.append(await test_available(client, "4", expected=True))
-            results.append(await test_stop(client, "5"))
-            results.append(await test_available(client, "6", expected=False))
-            results.append(await test_start(client, sse=True))
-            results.append(await test_stop(client, "8"))
-            results.append(await test_removed_stream_endpoint(client))
-            results.append(await test_available(client, "10", expected=False))
+
+            # 5. Stream (read from existing stream)
+            results.append(await test_stream(client))
+
+            # 6. Stop
+            results.append(await test_stop(client))
+
+            # 7. Available (still true after the stop: the device is released, the probe does not open it)
+            results.append(await test_available(client, "7", expected=True))
+
     finally:
-        print_header("Stopping server...")
+        # ── Shut down the server ──
+        print_header("🛑 Stopping server...")
         await stop_server(server, server_task)
         print_result("Server", True, "shut down gracefully")
 
+    # ── Summary ──
     passed = sum(results)
     total = len(results)
     print("\n" + "=" * 50)
     if passed == total:
-        print(f"  ALL PASSED ({passed}/{total})")
+        print(f"  ✅  ALL PASSED  ({passed}/{total})")
     else:
-        print(f"  FAILURES ({passed}/{total} passed)")
+        print(f"  ❌  FAILURES  ({passed}/{total} passed)")
     print("=" * 50 + "\n")
 
 

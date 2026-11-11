@@ -1,0 +1,267 @@
+import asyncio
+from collections.abc import AsyncIterator
+
+import pytest
+
+from application.dtos.inbound.start_stream_inbound import StartStreamInboundDTO
+from application.errors import StreamCloseFailed
+from application.ports.outbound.audio_capture_port import AudioCapturePort
+from application.ports.outbound.audio_stream_port import AudioStreamPort
+from application.services.microphone_service import MicrophoneService
+from domain.errors import CaptureAlreadyActive, CaptureNotActive, InvalidAudioFormat
+from domain.value_objects.audio_format import AudioFormat
+
+
+class FakeStream(AudioStreamPort):
+    def __init__(self, sample_rate: int, chunks: int = 3, fail_on_close: bool = False):
+        self._sample_rate = sample_rate
+        self._chunks = chunks
+        self._fail_on_close = fail_on_close
+        self.close_calls = 0
+
+    @property
+    def sample_rate(self) -> int:
+        return self._sample_rate
+
+    def __aiter__(self) -> AsyncIterator[bytes]:
+        async def gen():
+            for _ in range(self._chunks):
+                yield b"\x01\x00" * 4
+
+        return gen()
+
+    def on_terminated(self, callback) -> None:
+        self.callback = callback
+
+    def terminate(self) -> None:
+        self.callback()
+
+    async def close(self) -> None:
+        self.close_calls += 1
+        if self._fail_on_close:
+            raise StreamCloseFailed("Failed to stop microphone stream: device busy")
+
+
+class FakeCapture(AudioCapturePort):
+    def __init__(self, negotiated_rate: int | None = None, error: Exception | None = None):
+        self.negotiated_rate = negotiated_rate
+        self.error = error
+        self.opened: list[AudioFormat] = []
+        self.streams: list[FakeStream] = []
+        self.stream_kwargs: dict = {}
+
+    async def open_stream(self, audio_format: AudioFormat) -> AudioStreamPort:
+        await asyncio.sleep(0)  # yield, like real device I/O would
+        if self.error:
+            raise self.error
+        self.opened.append(audio_format)
+        stream = FakeStream(self.negotiated_rate or audio_format.sample_rate, **self.stream_kwargs)
+        self.streams.append(stream)
+        return stream
+
+
+def run(coro):
+    return asyncio.run(coro)
+
+
+def test_start_opens_device_with_requested_format_and_marks_available():
+    async def scenario():
+        port = FakeCapture()
+        service = MicrophoneService(port)
+        assert not service.is_available()
+
+        stream = await service.start_stream(StartStreamInboundDTO(8000, 1, 256))
+
+        assert port.opened == [AudioFormat(8000, 1, 256)]
+        assert stream.sample_rate == 8000
+        assert service.is_available()
+        assert (
+            service.current_stream() is stream
+        )  # the one stream of utterances, however often it is asked for
+
+    run(scenario())
+
+
+def test_start_reports_the_sample_rate_negotiated_by_the_device():
+    async def scenario():
+        service = MicrophoneService(FakeCapture(negotiated_rate=48000))
+        stream = await service.start_stream(StartStreamInboundDTO(16000, 1, 1024))
+        assert stream.sample_rate == 48000
+
+    run(scenario())
+
+
+def test_invalid_parameters_are_rejected_before_touching_the_device():
+    async def scenario():
+        port = FakeCapture()
+        service = MicrophoneService(port)
+        with pytest.raises(InvalidAudioFormat):
+            await service.start_stream(StartStreamInboundDTO(0, 1, 1024))
+        assert port.opened == []
+        assert not service.is_available()
+
+    run(scenario())
+
+
+def test_second_start_is_rejected_and_device_opened_once():
+    async def scenario():
+        port = FakeCapture()
+        service = MicrophoneService(port)
+        await service.start_stream(StartStreamInboundDTO())
+        with pytest.raises(CaptureAlreadyActive):
+            await service.start_stream(StartStreamInboundDTO())
+        assert len(port.opened) == 1
+
+    run(scenario())
+
+
+def test_concurrent_starts_only_one_wins():
+    async def scenario():
+        port = FakeCapture()
+        service = MicrophoneService(port)
+        results = await asyncio.gather(
+            service.start_stream(StartStreamInboundDTO()),
+            service.start_stream(StartStreamInboundDTO()),
+            return_exceptions=True,
+        )
+        assert sum(isinstance(r, CaptureAlreadyActive) for r in results) == 1
+        assert len(port.opened) == 1
+
+    run(scenario())
+
+
+def test_failed_open_leaves_service_idle_and_restartable():
+    async def scenario():
+        port = FakeCapture(error=RuntimeError("No microphone devices available"))
+        service = MicrophoneService(port)
+        with pytest.raises(RuntimeError):
+            await service.start_stream(StartStreamInboundDTO())
+        assert not service.is_available()
+
+        port.error = None
+        await service.start_stream(StartStreamInboundDTO())
+        assert service.is_available()
+
+    run(scenario())
+
+
+def test_stop_closes_stream_and_returns_to_idle():
+    async def scenario():
+        port = FakeCapture()
+        service = MicrophoneService(port)
+        await service.start_stream(StartStreamInboundDTO())
+
+        await service.stop_stream()
+
+        assert port.streams[0].close_calls == 1
+        assert not service.is_available()
+        with pytest.raises(CaptureNotActive):
+            service.current_stream()
+
+    run(scenario())
+
+
+def test_stop_when_idle_is_a_noop_and_repeatable():
+    async def scenario():
+        service = MicrophoneService(FakeCapture())
+        await service.stop_stream()
+        await service.stop_stream()
+        assert not service.is_available()
+
+    run(scenario())
+
+
+def test_stop_failure_is_reported_and_keeps_capture_active():
+    async def scenario():
+        port = FakeCapture()
+        port.stream_kwargs = {"fail_on_close": True}
+        service = MicrophoneService(port)
+        await service.start_stream(StartStreamInboundDTO())
+        with pytest.raises(StreamCloseFailed, match="Failed to stop microphone stream"):
+            await service.stop_stream()
+        assert service.is_available()
+
+    run(scenario())
+
+
+def test_can_restart_after_stop():
+    async def scenario():
+        port = FakeCapture()
+        service = MicrophoneService(port)
+        await service.start_stream(StartStreamInboundDTO())
+        await service.stop_stream()
+        await service.start_stream(StartStreamInboundDTO())
+        assert len(port.opened) == 2
+
+    run(scenario())
+
+
+def test_stream_terminating_on_its_own_returns_service_to_idle_and_restartable():
+    async def scenario():
+        port = FakeCapture()
+        service = MicrophoneService(port)
+        await service.start_stream(StartStreamInboundDTO())
+
+        port.streams[0].terminate()
+
+        assert not service.is_available()
+        with pytest.raises(CaptureNotActive):
+            service.current_stream()
+        await service.start_stream(StartStreamInboundDTO())
+        assert len(port.opened) == 2
+
+    run(scenario())
+
+
+def test_stale_termination_of_a_replaced_stream_is_ignored():
+    async def scenario():
+        port = FakeCapture()
+        service = MicrophoneService(port)
+        await service.start_stream(StartStreamInboundDTO())
+        await service.stop_stream()
+        await service.start_stream(StartStreamInboundDTO())
+
+        port.streams[0].terminate()  # the first stream reports late
+
+        assert service.is_available()
+
+    run(scenario())
+
+
+def test_the_stream_it_hands_out_is_the_capture_cut_into_utterances_at_the_rate_asked_for():
+    from array import array
+
+    from domain.value_objects.input_treatment import InputTreatment
+
+    loud = array("h", [1000, -1000] * 25).tobytes()
+
+    class LoudStream(FakeStream):
+        def __aiter__(self):
+            async def gen():
+                for chunk in (loud, loud, bytes(100), bytes(100), loud):
+                    yield chunk
+
+            return gen()
+
+    class LoudCapture(FakeCapture):
+        async def open_stream(self, audio_format):
+            return LoudStream(1000)
+
+    async def scenario():
+        treatment = InputTreatment(
+            silence_threshold=100,
+            silence_limit_seconds=0.1,
+            volume_smoothing=False,
+            noise_floor_tracking=False,
+            resample_to_hz=500,
+        )
+        service = MicrophoneService(LoudCapture(), treatment=treatment)
+        stream = await service.start_stream(StartStreamInboundDTO(1000, 1, 50))
+
+        assert stream.sample_rate == 500  # the rate of what it sends, not the device's
+        utterances = [u async for u in stream.stream]
+        assert (
+            len(utterances) == 2
+        )  # speech + silence, then the loud chunk that was cut off by the end of the stream
+
+    run(scenario())
