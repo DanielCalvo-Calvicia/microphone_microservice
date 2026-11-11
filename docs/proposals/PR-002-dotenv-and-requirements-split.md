@@ -12,3 +12,9 @@
 
 ## Notes
 Update `docs/configuration/environment-variables.md` (the note on `.env`), `docs/deployment/deployment.md`, `docs/security/security.md` (supply chain) and FR-16 when built.
+
+> **Update 2026-11-09:** the maintainer answered Q02-4 and Q02-7 "Recommended": load the `.env` (`python-dotenv`) with `dotenv = true` in `deployment` in the same piece of work (T-03.1 and T-06.1), exact `==` pins of the versions that ran (as stt), and one `requirements-dev.txt` (as tts). Not built yet.
+
+> **Update 2026-11-09 (items 2 and 3 built, T-03.2):** `requirements.windows.txt` and `requirements.linux.txt` hold only `fastapi==0.136.1`, `uvicorn==0.47.0`, `sounddevice==0.5.5`, `numpy==2.4.5`, `shared-logging` and the `contracts` 0.16.0 wheel; the tools are in `requirements-dev.txt`. Item 1 (the `.env` loading) is not built (T-03.1).
+
+> **Update 2026-11-10 (item 1 built, T-03.1 and T-06.1):** `main_flow/http.py` has `load_environment(path)` (`python-dotenv==1.2.4`, `override=False`, a missing file is fine) and `run_http` calls it before reading any setting; 5 tests in `tests/main_flow/test_environment.py`, 5 of 5 one-line mutations caught. In `deployment` the catalogue entry lost `dotenv = false` (the default is true), `tests/test_env_file_only.py` was reworked (the runner and the `--env-file` tests use a stand-in service with the flag off, since no shipped service lacks dotenv now; a new test pins that the microphone is mounted at `/app/.env` and not run through the runner) and the manual says so. **Status: Built.**

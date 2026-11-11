@@ -53,6 +53,7 @@ Wire format: the stream is NDJSON, one `contracts.stream` event per line, encode
 | `composition_root/` | The only place concrete adapters are chosen and connected (`new_audio_capture`, `new_microphone_service`, `new_http_app`, `HttpContainer`). |
 | `infrastructure/config` | `ServerConfig` and `MicrophoneConfig`: environment variables into frozen dataclasses. |
 | `infrastructure/inbound/http` | FastAPI handler, envelope answers, error to status mapping, the NDJSON event framing. Decode, call the port, encode. |
+| `infrastructure/outbound/sim_capture` | The simulated device behind the same ports (`MICROPHONE_BACKEND=sim`, ADR-007): `sim_audio_capture.py` (`SimAudioCapture`, its `check_device` returns the note for `/available`) and `sim_audio_stream.py` (a generated pattern paced like a device; no `sounddevice`, no PortAudio). |
 | `infrastructure/outbound/sounddevice_capture` | The hardware adapter behind `AudioCapturePort` / `AudioStreamPort`: driver, device selector, stream, error mapper. The only module that imports `sounddevice` is `sounddevice_driver.py`. |
 | `application` | `MicrophoneService` (orchestration under a lock, no rules of its own), `utterances_of` (feeds the segmenter), ports, DTOs, application errors. |
 | `domain` | The rules: `Microphone` state machine, `AudioFormat`, `InputTreatment`, `UtteranceSegmenter`, pure audio operations. Imports nothing outside the standard library. |
@@ -88,6 +89,7 @@ domain/
 infrastructure/
   config/                            server_config.py, microphone_config.py
   inbound/http/                      http_handler.py, http_envelope.py, http_error_mapper.py, ndjson_audio_events.py
+  outbound/sim_capture/              sim_audio_capture.py, sim_audio_stream.py (MICROPHONE_BACKEND=sim)
   outbound/sounddevice_capture/      audio_driver.py (protocol), sounddevice_driver.py, sounddevice_device_selector.py,
                                      sounddevice_audio_capture.py, sounddevice_audio_stream.py, sounddevice_error_mapper.py
 tests/                               domain, application, infrastructure, composition_root, architecture; simple.py (needs a real microphone)
@@ -174,12 +176,12 @@ Brain          handler            MicrophoneService      SoundDeviceAudioCapture
 
 ## 12. Known issues and debt
 
-1. **No simulation backend.** Without a device `/available` answers `is_available: false` and Brain's start-up preflight requires it, so a machine with no microphone cannot run the pipeline. The deployment readiness check (`ready = "/available"`) also fails there. Proposal: `docs/proposals/PR-001-simulated-capture-backend.md` (epic T-02 in `docs/tasks/ORDER.md`).
+1. ~~No simulation backend.~~ **Built 2026-11-10 (T-02.1 to T-02.4, ADR-007):** `MICROPHONE_BACKEND=sim` gives a machine with no microphone a generated signal, `/available` says so in its `reason`, and the composition root imports the `sounddevice` adapter only for `real`. With `real` and no device `/available` is still `is_available: false`, on purpose. Run as the real service, through the pipeline check and in Docker on amd64 on 2026-11-10 (T-02.5, T-07).
 2. **`channels > 1` is mixed to mono silently**; the `/start` answer always says `channels = 1` and does not say the request was downmixed.
 3. **No authentication.** Service-to-service authentication is not designed for the project.
-4. **The sounddevice adapter is unvalidated on real hardware** since the last changes (it is tested against a fake `AudioDriver`; `tests/simple.py` needs a real microphone). The silence thresholds are not tuned on real rooms either.
-5. **No `.env` loading.** `main_flow/http.py` does not load `.env` (no `python-dotenv`); the deployment tool reads the file and starts the process (catalogue key `dotenv = false`), and a hand start must export the variables.
-6. **Dev tools in the runtime requirements** (`ruff`, `black`, `mypy`, `pytest`, `httpx`), and nothing is version-pinned.
+4. **The sounddevice adapter was run on a real headset microphone on 2026-11-10 (T-04.1)**; before that it was unvalidated since the last changes (it is tested against a fake `AudioDriver`; `tests/simple.py` needs a real microphone). The silence thresholds are not tuned on real rooms either.
+5. ~~No `.env` loading~~ **Fixed 2026-11-10 (T-03.1):** `main_flow/http.py` `load_environment` reads the `.env` next to `main.py` (`python-dotenv`), and the catalogue says `dotenv = true`.
+6. ~~Dev tools in the runtime requirements~~ **Fixed 2026-11-09 (T-03.2):** they are in `requirements-dev.txt`, and the four runtime packages are pinned exactly. Transitive packages are not locked.
 7. **A mid-stream device failure loses the utterance in progress.**
 8. **`MICROPHONE_SHOW_METER` defaults to `true`**: the console meter writes to stdout on every chunk, which is noise in a service log; set it to `false` outside a manual test.
 9. **`chunk_size` on `/stream`** is accepted and ignored (the capture's value is fixed by `/start`).
@@ -188,8 +190,8 @@ Brain          handler            MicrophoneService      SoundDeviceAudioCapture
 
 **Planned (from the deployment audit of 2026-11-04, not built; the order is in `docs/tasks/ORDER.md`: T-02 sim backend, T-03 start-up configuration, T-04 hardware verification):**
 
-- A `sim` backend behind `AudioCapturePort` (`PR-001`), code default `real`.
-- `python-dotenv` loading in `main_flow/http.py`, then `dotenv = true` in the deployment catalogue (and the matching test of `deployment`).
-- Split the requirements: runtime and development files, with lower bounds (`>=`).
+- ~~A `sim` backend behind `AudioCapturePort` (`PR-001`), code default `real`.~~ Built 2026-11-10 (T-02.1 to T-02.4).
+- ~~`python-dotenv` loading, then `dotenv = true` in the catalogue~~ Done 2026-11-10 (T-03.1, T-06.1).
+- ~~Split the requirements~~ Done 2026-11-09 (T-03.2).
 
 **Cleanup:** the stale `.engram/` folder and `docs/old/` can be removed once nothing is wanted from them.

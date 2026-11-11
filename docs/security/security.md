@@ -26,5 +26,9 @@ Only what can be verified in the repository. Labels: **Implemented** (in the cod
 
 ## Supply chain
 
-- **Not implemented / recommended:** no dependency is version-pinned (the requirements files list bare names, plus the bundled `contracts` wheel and the local `shared-logging`), and the development tools are in the runtime requirements. See `docs/proposals/PR-002-dotenv-and-requirements-split.md`.
+- **Supply chain:** since 2026-11-09 (T-03.2) the runtime requirements pin the four packages the service imports to exact versions, the bundled `contracts` wheel is named by version, and the development tools are in `requirements-dev.txt`, which the deploy tool never installs. **Not locked:** the packages those depend on (no lock file). See `docs/proposals/PR-002-dotenv-and-requirements-split.md`.
 - **Implemented:** `contracts` comes from a wheel bundled in `vendor/`, refreshed by `contracts/scripts/bundle.py`, never edited by hand.
+
+- **A simulated device is not a security feature (T-06.5):** `MICROPHONE_BACKEND=sim` generates a tone and opens no device, so it listens to nothing and captures nothing; it does not hide anything either, because `/available` says `simulated microphone` in its `reason` and the service logs a warning at start. The risk it adds is operational: the deploy catalogue presets `sim`, so a machine with a real microphone that forgets `MICROPHONE_BACKEND = "real"` in its `config/local/microphone.toml` is healthy and deaf.
+
+- **Docker image (T-07.4, 2026-11-10):** the image holds no `.env` file and no secret (counts in `docs/deployment/deployment.md`); the `.env` is a read-only bind mount. The process runs as **root** (the generic Dockerfile sets no `USER`); the image also contains `tests/`, `docs/` and `.engram/` because it copies the whole service tree. Not fixed: both belong to the deployment tool's Dockerfile.

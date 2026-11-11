@@ -5,3 +5,5 @@ Decision questionnaires for the maintainer, in the format of `dynamics_microserv
 | File | Subject | State |
 |---|---|---|
 | [Q01_open-questions.md](Q01_open-questions.md) | What the documentation could not decide from the code: the simulated backend, `.env` loading, the meter default, the stale folders, the env files, the hardware session | Awaiting the maintainer (no answer recorded) |
+
+Newer questionnaire for the deployment work: [../../questionnaires/Q02_deployment-readiness.md](../../questionnaires/Q02_deployment-readiness.md) (answered 2026-11-09 "Recommended" for all nine; it re-asks Q01-1 to Q01-4, which it supersedes).

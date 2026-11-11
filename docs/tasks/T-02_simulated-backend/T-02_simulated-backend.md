@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| Status | todo (T-02.1 is `awaiting-user`) |
+| Status | done |
 | Kind | epic |
 | Depends on | T-02.1 |
 | Blocks | — |

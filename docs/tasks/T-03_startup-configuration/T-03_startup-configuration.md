@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| Status | todo (T-03.2 is next; T-03.3 is `awaiting-user`, and it blocks T-03.1) |
+| Status | done |
 | Kind | epic |
 | Depends on | — |
 | Blocks | — |
@@ -26,3 +26,7 @@ T-03.2 (requirements split, no other repository) first, because it needs no deci
 ## Notes
 
 stt and stepper are the reference: `_ENV_FILE = Path(__file__).resolve().parent.parent / ".env"` and `load_dotenv(dotenv_path=_ENV_FILE)` in their `main_flow/http.py`; in a container that resolves to `/app/.env`, where the deployment tool bind-mounts the file. Read them before writing, do not edit them.
+
+## Update 2026-11-09 (plan revision 2)
+
+The `deployment` side of this epic (the catalogue flag, three tests, the manual) is **T-06.1**, in the new epic T-06; the epic closes when T-03.1 to T-03.3 **and** T-06.1 are done. The pins follow Q02-7.

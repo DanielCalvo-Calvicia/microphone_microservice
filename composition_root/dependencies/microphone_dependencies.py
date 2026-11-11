@@ -1,5 +1,5 @@
 from fastapi import FastAPI
-from shared_logging import TracingMiddleware
+from shared_logging import TracingMiddleware, get_logger
 
 from application.ports.inbound.microphone_streaming_port import MicrophoneStreamingPort
 from application.ports.outbound.audio_capture_port import AudioCapturePort
@@ -7,14 +7,28 @@ from application.services.microphone_service import MicrophoneService
 from domain.value_objects.input_treatment import InputTreatment
 from infrastructure.config.microphone_config import MicrophoneConfig
 from infrastructure.inbound.http.http_handler import MicrophoneHandler
-from infrastructure.outbound.sounddevice_capture.sounddevice_audio_capture import (
-    SoundDeviceAudioCapture,
-)
-from infrastructure.outbound.sounddevice_capture.sounddevice_device_selector import DeviceSelector
-from infrastructure.outbound.sounddevice_capture.sounddevice_driver import SoundDeviceDriver
+from infrastructure.outbound.sim_capture.sim_audio_capture import SimAudioCapture
+
+logger = get_logger(__name__)
 
 
 def new_audio_capture(cfg: MicrophoneConfig) -> AudioCapturePort:
+    """Choose the capture adapter (MICROPHONE_BACKEND, ADR-007).
+
+    The sound-card adapter is imported only on the ``real`` branch: it imports ``sounddevice``,
+    which needs PortAudio, and a machine without it must still be able to run ``sim``.
+    """
+    if cfg.backend == "sim":
+        logger.warning("Microphone backend is simulated")
+        return SimAudioCapture()
+    from infrastructure.outbound.sounddevice_capture.sounddevice_audio_capture import (
+        SoundDeviceAudioCapture,
+    )
+    from infrastructure.outbound.sounddevice_capture.sounddevice_device_selector import (
+        DeviceSelector,
+    )
+    from infrastructure.outbound.sounddevice_capture.sounddevice_driver import SoundDeviceDriver
+
     driver = SoundDeviceDriver()
     return SoundDeviceAudioCapture(
         driver=driver,

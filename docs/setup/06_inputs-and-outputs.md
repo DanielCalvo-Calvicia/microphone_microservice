@@ -8,7 +8,7 @@
 |---|---|---|
 | Control requests | HTTP from Brain | `POST /start` (JSON body, all optional: `sample_rate` 16000, `channels` 1, `chunk_size` 1024), `POST /stop`, `GET /stream` (optional `sample_rate`, `chunk_size`), `GET /available`, `GET /health` |
 | Audio | The input device | Whatever the device delivers; opened at the requested format, else at its native rate, else (mono request) as stereo at the native rate; downmixed to mono |
-| Configuration | Process environment | 15 variables (`docs/configuration/environment-variables.md`); no `.env` loading |
+| Configuration | Process environment | 15 variables (`docs/configuration/environment-variables.md`); the `.env` next to `main.py` is loaded at start |
 | Trace context | HTTP header | W3C `traceparent`, continued by `TracingMiddleware` |
 
 ## Outputs

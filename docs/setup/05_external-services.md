@@ -10,7 +10,7 @@ Never write credentials here. This service has none.
 | Audio input device | Out (local hardware) | PortAudio through `sounddevice` | OS permission to use the microphone | The source of the audio | Windows works; Linux / Raspberry Pi not run |
 | `deployment` tool | In (HTTP `GET /available`) | HTTP | none | Readiness check after a deploy or update (`ready = "/available"`, 15 s grace) | Working |
 | `shared-logging` | Library (in process) | Python import, editable install | — | Logging, tracing middleware (`TracingMiddleware`, `X-Trace-Id`), optional trace export | Working |
-| `contracts` | Library (in process) | Python wheel bundled in `vendor/` (0.15.0) | — | Event schemas, codec, envelope, API dataclasses | Working |
+| `contracts` | Library (in process) | Python wheel bundled in `vendor/` (0.16.0) | — | Event schemas, codec, envelope, API dataclasses | Working |
 | STT, TTS, speaker, stepper, ai-agent | None | — | — | They never talk to this service, and it never talks to them (Brain is the only coordinator) | NOT APPLICABLE |
 | AWS, databases, cloud APIs | None | — | — | — | NOT APPLICABLE |
 | Source control / CI | GitHub remote; no workflows in this repository | — | — | — | Repository active; CI UNKNOWN |

@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| Status | todo (needs the maintainer and a microphone) |
+| Status | done |
 | Kind | epic |
 | Depends on | T-01 |
 | Blocks | — |
@@ -21,10 +21,14 @@ Find out how the service behaves on a real microphone, on Linux / Raspberry Pi a
 
 ## Order
 
-T-04.1 (a real microphone on Windows) -> T-04.2 (tune the defaults with what T-04.1 shows). T-04.3 (Linux / Raspberry Pi) -> T-04.4 (Docker with `/dev/snd`). The two chains are independent.
+T-04.1 (a real microphone on Windows) -> T-04.2 (tune the defaults with what T-04.1 shows). **T-04.3 (Linux / Raspberry Pi) -> T-04.4 (Docker with `/dev/snd`) are `postponed`** (decision of the maintainer, 2026-11-09: the Pi and native Linux wait until the services work at 100 % on Windows).
 
 ## Exit criteria
 
 - `tests/simple.py` was run on a real microphone and its outcome recorded; the treatment defaults are either confirmed or changed with a decision.
 - The behaviour on Linux and in Docker is recorded, including what does not work.
 - Every "hardware pending" in the documents is replaced by what was observed, with its date, or kept with the reason.
+
+## Update 2026-11-09 (plan revision 2)
+
+Exit criteria now: `tests/simple.py` was run on a real microphone and the defaults are confirmed or changed with a decision (T-04.1, T-04.2); the Linux and Docker-with-`/dev/snd` parts are postponed and are **not** exit criteria of this epic until the maintainer lifts the postponement. Audio tasks are run with the maintainer at the PC: the assistant says before the microphone opens and deletes every recording of the maintainer's voice at the end.

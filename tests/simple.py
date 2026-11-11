@@ -37,6 +37,7 @@ PORT = 8000
 BASE_URL = f"http://{HOST}:{PORT}"
 STREAM_READ_SECONDS = 2  # How long to read audio chunks from each streaming endpoint
 STARTUP_TIMEOUT = 10  # Max seconds to wait for the server to become healthy
+GRACEFUL_SHUTDOWN_SECONDS = 5
 
 
 # ──────────────────────────────────────────────
@@ -54,7 +55,13 @@ async def start_server() -> tuple[uvicorn.Server, asyncio.Task]:
     )
     app = container.app
 
-    config = uvicorn.Config(app, host=HOST, port=PORT, log_level="warning")
+    config = uvicorn.Config(
+        app,
+        host=HOST,
+        port=PORT,
+        log_level="warning",
+        timeout_graceful_shutdown=GRACEFUL_SHUTDOWN_SECONDS,  # like main.py: a leftover stream must not hang the stop
+    )
     server = uvicorn.Server(config)
 
     task = asyncio.create_task(server.serve())
@@ -103,19 +110,24 @@ def print_result(label: str, success: bool, detail: str = "") -> None:
 
 async def read_stream_for(response: httpx.Response, seconds: float) -> int:
     """Read the microphone's event stream for a limited duration, validating it against the
-    ``MICROPHONE_OUTBOUND`` contract. Returns the number of PCM16 audio bytes received."""
-    audio_bytes = 0
+    ``MICROPHONE_OUTBOUND`` contract. Returns the number of events received.
+
+    The microphone cuts the capture into utterances itself, so the stream carries ``stream_started``
+    and then one ``utterance`` per finished utterance (an utterance ends after the silence limit, so
+    a short read of a quiet room sees only ``stream_started``). It no longer carries raw audio."""
+    events = 0
     deadline = time.monotonic() + seconds
     decoder = NdjsonDecoder(MICROPHONE_OUTBOUND)
 
     async for chunk in response.aiter_bytes(chunk_size=4096):
         for event in decoder.feed(chunk):
-            if event.type is EventType.PARTIAL:
-                audio_bytes += len(base64.b64decode(event.payload.bytes_base64))
+            events += 1
+            if event.type is EventType.UTTERANCE:
+                print(f"      utterance of {len(base64.b64decode(event.payload.bytes_base64))} bytes")
         if time.monotonic() >= deadline:
             break
 
-    return audio_bytes
+    return events
 
 
 # ──────────────────────────────────────────────
@@ -136,30 +148,26 @@ async def test_available(client: httpx.AsyncClient, step: str, expected: bool) -
     print_header(f"{step}. Availability Check  →  GET /available  (expect={expected})")
     resp = await client.get(f"{BASE_URL}/available")
     body = resp.json()
-    actual = body.get("data")
+    actual = (body.get("data") or {}).get("is_available")  # a device probe: true whenever an input device exists
     ok = resp.status_code == 200 and actual == expected
     print_result("Available", ok, f"expected={expected}  actual={actual}")
     return ok
 
 
 async def test_start(client: httpx.AsyncClient) -> bool:
-    print_header("3. Start Microphone  →  POST /start  (streaming response)")
-    async with client.stream(
-        "POST",
+    print_header("3. Start Microphone  →  POST /start  (JSON envelope; the audio is read in step 5)")
+    resp = await client.post(
         f"{BASE_URL}/start",
         json={"sample_rate": 16000, "channels": 1, "chunk_size": 1024},
-    ) as resp:
-        sample_rate = resp.headers.get("x-sample-rate", "?")
-        status_hdr = resp.headers.get("x-status", "?")
-
-        total = await read_stream_for(resp, STREAM_READ_SECONDS)
-
-    ok = resp.status_code == 200 and total > 0
+    )
+    body = resp.json()
+    data = body.get("data") or {}
+    ok = resp.status_code == 200 and body.get("status") == "success" and data.get("sample_rate") == 16000
     print_result(
-        "Start + Stream",
+        "Start",
         ok,
-        f"status={resp.status_code}  audio_bytes={total}  "
-        f"sample_rate={sample_rate}  x-status={status_hdr}",
+        f"status={resp.status_code}  sample_rate={data.get('sample_rate')}  "
+        f"channels={data.get('channels')}  encoding={data.get('encoding')}",
     )
     return ok
 
@@ -179,7 +187,7 @@ async def test_stream(client: httpx.AsyncClient) -> bool:
     print_result(
         "Stream",
         ok,
-        f"status={resp.status_code}  audio_bytes={total}  sample_rate={sample_rate}",
+        f"status={resp.status_code}  events={total}  sample_rate={sample_rate}",
     )
     return ok
 
@@ -215,13 +223,13 @@ async def run_tests() -> None:
             # 1. Health
             results.append(await test_health(client))
 
-            # 2. Available (should be False before start)
-            results.append(await test_available(client, "2", expected=False))
+            # 2. Available (a device probe: true whenever an input device exists, started or not)
+            results.append(await test_available(client, "2", expected=True))
 
-            # 3. Start (streams audio for STREAM_READ_SECONDS then disconnects)
+            # 3. Start (the JSON envelope of the opened capture)
             results.append(await test_start(client))
 
-            # 4. Available (should be True after start)
+            # 4. Available (true while capturing)
             results.append(await test_available(client, "4", expected=True))
 
             # 5. Stream (read from existing stream)
@@ -230,8 +238,8 @@ async def run_tests() -> None:
             # 6. Stop
             results.append(await test_stop(client))
 
-            # 7. Available (should be False after stop)
-            results.append(await test_available(client, "7", expected=False))
+            # 7. Available (still true after the stop: the device is released, the probe does not open it)
+            results.append(await test_available(client, "7", expected=True))
 
     finally:
         # ── Shut down the server ──

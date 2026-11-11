@@ -11,18 +11,18 @@ input device  ──►  capture (mono PCM16)  ──►  utterance cutting  ─
 
 ## Status
 
-Working on Windows, **needs a retest on real hardware** after the last changes (the utterance cutting moved here from STT on 2026-10-05). Linux / Raspberry Pi and Docker are not run on real hardware yet.
+Working on Windows, **was retested on a real headset microphone on 2026-11-10** (T-04.1: three sentences became three utterances through `/stream`, no overflow; the defaults are not tuned yet, T-04.2) after the utterance cutting moved here from STT on 2026-10-05. Linux / Raspberry Pi and Docker are not run on real hardware yet.
 
 | Area | State |
 |---|---|
-| Capture from the input device, format negotiation, downmix to mono | Implemented; tested against a fake driver, hardware pending |
+| Capture from the input device, format negotiation, downmix to mono | Implemented; tested against a fake driver and run on a real headset microphone on 2026-11-10 (T-04.1) |
 | Device choice by name keywords, else the OS default input | Implemented |
 | Utterance cutting and its treatments (DC offset, smoothing, noise floor, resample, pre-roll) | Implemented (ADR-003); defaults not tuned on real rooms; the pre-roll (2026-11-09) is tested with fake audio and one offline recording of the stt diagnosis, not on this service with a real microphone |
 | Routes `/start`, `/stream`, `/stop`, `/available`, `/health` | Implemented |
-| Wire format: `contracts.stream` NDJSON events and the `ApiEnvelope` | Implemented; `contracts` 0.15.0 bundled in `vendor/` |
-| Simulated capture backend (a machine without a microphone) | Planned ([PR-001](docs/proposals/PR-001-simulated-capture-backend.md), epic T-02; its first task waits for the maintainer's decisions, Q01-1 to Q01-3) |
-| `.env` loading, runtime and dev requirements split | Planned ([PR-002](docs/proposals/PR-002-dotenv-and-requirements-split.md), epic T-03; T-03.2, the requirements split, is the next task) |
-| Hardware verification: a real microphone, Linux / Raspberry Pi, Docker | Not done; needs the maintainer (epic T-04) |
+| Wire format: `contracts.stream` NDJSON events and the `ApiEnvelope` | Implemented; `contracts` 0.16.0 bundled in `vendor/` |
+| Simulated capture backend (a machine without a microphone) | Built 2026-11-10 ([PR-001](docs/proposals/PR-001-simulated-capture-backend.md), [ADR-007](docs/decisions/ADR-007-simulated-capture-backend.md), T-02.1 to T-02.4): `MICROPHONE_BACKEND=sim`, code default `real`. Run as the real service, through the pipeline check and in Docker on amd64 (T-02.5, T-07, 2026-11-10); not with a real microphone (T-04.1) |
+| `.env` loading, runtime and dev requirements split | Built (T-03.1 and T-03.2, 2026-11-10; [PR-002](docs/proposals/PR-002-dotenv-and-requirements-split.md)): the `.env` is loaded at start, the requirements are split and pinned |
+| Hardware verification: a real microphone, Linux / Raspberry Pi, Docker | T-04.1 done 2026-11-10 (real microphone, Windows); T-04.2 (tuning the defaults) needs the maintainer; Linux / Raspberry Pi postponed; Docker with `sim` done (T-07) |
 | Authentication | Not designed (project-wide, ADR-005) |
 
 ## Requirements
@@ -34,11 +34,12 @@ Working on Windows, **needs a retest on real hardware** after the last changes (
 ## Run
 
 ```bash
-pip install -r requirements.windows.txt   # Linux / Raspberry Pi: requirements.linux.txt
+pip install -r requirements.windows.txt   # Linux / Raspberry Pi: requirements.linux.txt (runtime only, exact versions)
+pip install -r requirements-dev.txt        # tests and lint (not needed to run, never installed by the deploy tool)
 python main.py
 ```
 
-Use the service's own venv, `windows\Scripts\python.exe`. Configuration is read from the process environment (the service does not load `.env`; the deployment tool does it for you); see `.env.example`. The default bind address is `127.0.0.1`; set `SERVICE_HOST` (for example `0.0.0.0`) when Brain runs on another machine.
+Use the service's own venv, `windows\Scripts\python.exe`. Configuration is read from the process environment, after the `.env` next to `main.py` has been loaded (a variable already set in the process wins; a missing file is fine); see `.env.example`. The default bind address is `127.0.0.1`; set `SERVICE_HOST` (for example `0.0.0.0`) when Brain runs on another machine.
 
 ## Configuration
 
@@ -50,6 +51,7 @@ Full table with the rules of each value: [docs/configuration/environment-variabl
 | `SERVICE_HOST` | `127.0.0.1` | Bind address |
 | `SERVICE_PORT` | `8000` | Bind port |
 | `LOG_LEVEL` | `INFO` | Read by the shared logging module (`TRACE`, `DEBUG`, `INFO`, `WARN`/`WARNING`, `ERROR`, `CRITICAL`) |
+| `MICROPHONE_BACKEND` | `real` | `real` = the sound card; `sim` = a generated signal (0.3 s of room noise, 5 s of tone, then silence, once per `/start`, paced like a real device) that needs no sound card and no PortAudio; `/available` then says `simulated microphone` in its `reason`. Any other value stops the start |
 | `MICROPHONE_FALLBACK_SAMPLE_RATE` | `16000` | Rate used if the device reports none |
 | `MICROPHONE_TARGET_KEYWORDS` | *(empty)* | Comma-separated device-name keywords (first match wins); empty = OS default input |
 | `MICROPHONE_SHOW_METER` | `true` | Console volume meter (`1`, `true` or `yes`); turn it off outside a manual test |
@@ -96,7 +98,7 @@ windows\Scripts\python.exe -m mypy .
 windows\Scripts\python.exe tests\simple.py  # end to end, needs a real microphone
 ```
 
-Result on 2026-11-09: `142 passed` in 2.1 s, ruff `All checks passed!`, mypy `no issues found in 53 source files` (127 passed on 2026-11-05, before the pre-roll). `tests/simple.py` and the sounddevice adapter on real hardware were not run (they need a microphone). `black` is configured in `pyproject.toml` and listed in the requirements; it was not run.
+Result on 2026-11-10: `171 passed` in 2.3 s, ruff `All checks passed!`, mypy `no issues found in 56 source files` (142 passed on 2026-11-09, 127 on 2026-11-05). `tests/simple.py` was found stale on the real microphone (2 of 7 checks failed because of the script) and fixed (7 of 7 on `sim`, not re-run on the real device); the sounddevice adapter and the cutting ran on a real headset microphone on 2026-11-10 (T-04.1). `black` is configured in `pyproject.toml` and listed in the requirements; it was not run.
 
 ## Project layout
 
@@ -108,7 +110,7 @@ infrastructure/    config, HTTP (inbound: handler, envelope, error mapper, NDJSO
 application/       use-case service, utterance stream, ports, DTOs, application errors
 domain/            entities (Microphone, UtteranceSegmenter), value objects, pure audio operations
 tests/             domain, application, infrastructure, composition_root, architecture; simple.py (needs a real microphone)
-vendor/            the bundled contracts wheel (0.15.0)
+vendor/            the bundled contracts wheel (0.16.0)
 docs/              architecture, api, configuration, operations, requirements, security, deployment, decisions, proposals
 ```
 
@@ -117,16 +119,17 @@ Dependencies point inward only (`infrastructure -> application -> domain`); `tes
 ## Scope
 
 - **In scope:** capture, format negotiation, mono PCM16, utterance cutting, the optional resample, the HTTP control routes and the event stream.
-- **Planned:** a simulated capture backend and `.env` loading (PR-001, PR-002).
+- **Built and run (2026-11-10):** the simulated capture backend (PR-001, ADR-007) and `.env` loading (PR-002), as the real service, through the pipeline check and in Docker on amd64 on `sim` (T-02.5, T-07). Not run: a real microphone (T-04.1) and Linux or the Raspberry Pi (postponed).
+- `docker stop` with a `/stream` consumer connected ends in about 6 s with exit code 0 since 2026-11-10 (uvicorn cancels open requests after `GRACEFUL_SHUTDOWN_SECONDS` = 5 s and the cleanup runs); uvicorn logs the cancelled request as an ERROR line.
 - **Non-goals:** speech to text (STT), calling any other service (Brain is the only coordinator), authentication (not designed project-wide), recording audio to disk.
 
 ## Known limitations
 
 - The sounddevice adapter and the thresholds are not validated on real hardware since the utterance cutting moved here.
-- A machine without a microphone cannot run the pipeline (no simulated backend), and the deployment readiness check (`/available`) reports it as failed.
+- With `MICROPHONE_BACKEND=real` (the default) a machine without a microphone is reported unavailable by `/available`, and the deployment readiness check reports the deploy as failed: that is on purpose (a broken microphone must not look healthy). Use `MICROPHONE_BACKEND=sim` on a machine that has none; the deploy catalogue presets it, so the machine with the sound card must set `real` in its `config/local/microphone.toml`.
 - `channels > 1` is mixed to mono silently.
 - The utterance in progress is lost if the device fails mid-stream.
-- The service does not load `.env`; the dev tools are in the runtime requirements and nothing is pinned.
+- The runtime requirements are pinned to the versions that ran, but only their top-level packages: their own dependencies are not locked.
 - No authentication: restrict the port with the host firewall when `SERVICE_HOST` is not `127.0.0.1`.
 
 ## Documentation

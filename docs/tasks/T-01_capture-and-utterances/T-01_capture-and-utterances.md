@@ -42,3 +42,7 @@ The sounddevice adapter and the thresholds on a real microphone (`tests/simple.p
 
 - The requirement rows are FR-1 to FR-14 and NFR-1 to NFR-7 of `docs/requirements/requirements.md`.
 - The decisions are ADR-001 to ADR-005.
+
+## Update 2026-11-09: the pre-roll (history)
+
+Built after the plan of 2026-11-05 and not in it: `MICROPHONE_PREROLL_SECONDS` (default 0.2 s), commit `fde20ad`. The segmenter keeps the latest quiet chunks in a small rolling buffer and puts them in front of an utterance when it starts, so the opening of the first word is not cut off (the wake-phrase gate of stt needs it, stt ADR-005). 12 tests, 10 of 10 one-line mutations caught, 142 tests in all, ruff and mypy clean; live round trip through Brain: 4 of 4 phrases that reached the gate were accepted. Record: the three updates of 2026-11-09 in [ADR-003](../../decisions/ADR-003-utterance-cutting-in-the-microphone.md). Not run: a real microphone with the default treatment after the change (T-04.1, T-04.2).

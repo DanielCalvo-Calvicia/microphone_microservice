@@ -11,14 +11,14 @@
 | `utterance-cutting-in-the-microphone` | Silence detection and the input treatments live here; one `utterance` event per utterance; the cutting is always on, each treatment is an env var | STT should only transcribe; less traffic; thresholds tuned where the audio is captured | 2026-10-05 | ADR-003 |
 | `http-status-mapping-and-device-probe` | 409, 422, 503, 500 mapped in one place; `/available` probes the device without opening it | Brain and the deployment tool must tell "no microphone" from a bug | 2026-09-20 | ADR-004 |
 | `no-authentication-for-now` | No authentication, CORS or rate limit; bind `127.0.0.1` by default | Service-to-service authentication is not designed project-wide | 2026-10-01 | ADR-005 |
+| `simulated-capture-backend` | `MICROPHONE_BACKEND=real|sim`, code default `real`, `sim` through a catalogue preset, reported in the `reason` of `/available`, generated signal paced to real time | A machine without a microphone must pass the readiness check without making a broken microphone look healthy | 2026-11-09 | ADR-007 (Accepted; built 2026-11-10) |
 | `documentation-structure` | The documentation follows the structure of `dynamics_microservice`: setup, tasks, requirements, api, configuration, operations, security, deployment, decisions, proposals; every change updates it | One home per fact, and a rule that keeps it true | 2026-11-05 | ADR-006 |
 
 ## Proposed, not decided
 
 | Slug | Proposal | Blocked by | Record |
 |---|---|---|---|
-| `simulated-capture-backend` | A `sim` backend behind the same ports, code default `real` | Question Q01-1 and Q01-2 (the variable name and where the sim default is set) | PR-001, T-02 |
-| `dotenv-and-requirements-split` | Load `.env`, split dev requirements, lower bounds | Q01-4 (the change in `deployment`) | PR-002, T-03 |
+| `dotenv-and-requirements-split` | Built 2026-11-10: load `.env`, split dev requirements, exact pins (Q02-4 and Q02-7 answered "Recommended") | — | PR-002, T-03 |
 
 ## Overrides of the workspace standard
 

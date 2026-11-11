@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from domain.value_objects.input_treatment import InputTreatment
 
 _TRUE = {"1", "true", "yes", "on"}
+BACKENDS = ("real", "sim")
 
 
 def _flag(env: Mapping[str, str], name: str, default: bool) -> bool:
@@ -18,6 +19,7 @@ class MicrophoneConfig:
     target_keywords: tuple[str, ...]
     show_meter: bool
     treatment: InputTreatment
+    backend: str = "real"  # MICROPHONE_BACKEND: "real" (sound card) or "sim" (generated signal)
 
     @classmethod
     def from_env(cls, env: Mapping[str, str] = os.environ) -> "MicrophoneConfig":
@@ -27,7 +29,17 @@ class MicrophoneConfig:
             target_keywords=tuple(k.strip() for k in raw_keywords.split(",") if k.strip()),
             show_meter=env.get("MICROPHONE_SHOW_METER", "true").lower() in {"1", "true", "yes"},
             treatment=cls._treatment_from(env),
+            backend=cls._backend_from(env),
         )
+
+    @staticmethod
+    def _backend_from(env: Mapping[str, str]) -> str:
+        backend = env.get("MICROPHONE_BACKEND", "").strip().lower() or "real"
+        if backend not in BACKENDS:
+            raise ValueError(
+                f"MICROPHONE_BACKEND must be one of {', '.join(BACKENDS)}, not {backend!r}"
+            )
+        return backend
 
     @staticmethod
     def _treatment_from(env: Mapping[str, str]) -> InputTreatment:

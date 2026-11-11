@@ -2,7 +2,7 @@
 
 All variables are read once at start-up by `ServerConfig.from_env()` and `MicrophoneConfig.from_env()` (`infrastructure/config/`), in `main_flow/http.py`. The template with comments is [`.env.example`](../../.env.example); the README repeats the tables. **No variable of this service holds a secret.** Never write a real secret in `.env.example`, in the code or in a document.
 
-The service does **not** load a `.env` file itself (no `python-dotenv`): the variables must be in the process environment. The deployment tool (`../deployment`) reads `config/local/microphone.toml` and the catalogue and starts the process with them (catalogue key `dotenv = false`); for a hand start, export them first. The git-ignored files `.env`, `.env.staging` and `.env.production` exist next to `.env.example`: do not open or copy them.
+The service loads the `.env` next to `main.py` itself at start (`python-dotenv`, `main_flow/http.py` `load_environment`, since 2026-11-10): a missing file is fine, and a variable that is already set in the process environment wins over the file. The deployment tool (`../deployment`) writes that file from `config/local/microphone.toml` and the catalogue (catalogue key `dotenv = true`, the default); in Docker it is bind-mounted read-only at `/app/.env`. For a hand start, copy `.env.example` to `.env`. The git-ignored files `.env`, `.env.staging` and `.env.production` exist next to `.env.example`: do not open or copy them.
 
 A value that cannot be parsed (`int("abc")`, `float("x")`) stops the start with the Python exception. A value out of range stops it with `InvalidInputTreatment` naming the setting (see the *Rule* column).
 
@@ -19,6 +19,7 @@ A value that cannot be parsed (`int("abc")`, `float("x")`) stops the start with 
 
 | Variable | Default | Description | Sensitive |
 |---|---|---|---|
+| `MICROPHONE_BACKEND` | `real` | `real` = the sound card; `sim` = a generated signal for a machine with no microphone (ADR-007). Case-insensitive; any other value raises an error that names the variable and stops the start. The code default is `real` on purpose: a missing real microphone is never replaced by `sim`. The deploy catalogue presets `sim`; the machine with the sound card sets `real` in `deployment/config/local/microphone.toml` | no |
 | `MICROPHONE_FALLBACK_SAMPLE_RATE` | `16000` | Rate used when the device reports none | no |
 | `MICROPHONE_TARGET_KEYWORDS` | empty | Comma-separated words of the device name; the first input device whose name contains one of them (case-insensitive) is used; empty or no match means the OS default input. Machine-specific: set it in that machine's local deployment settings | no |
 | `MICROPHONE_SHOW_METER` | `true` | Console volume meter, rewritten on every chunk. Accepts `1`, `true`, `yes` (anything else is off). Set `false` outside a manual test | no |

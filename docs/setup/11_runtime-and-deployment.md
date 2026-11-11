@@ -11,7 +11,7 @@
 | Health checks | `/health` (liveness) and `/available` (readiness, the device probe) |
 | CI/CD | UNKNOWN in this repository (no workflows); deployment is `deployment/oblivion.py` (`deploy`, `update`, `rollback`) |
 | Deployment / releases | The tool clones the `feature_ai_claude_2` branch, installs the requirements for the platform and the library `shared-logging`, then starts the service; `update` pulls and restarts, rolling back to the previous commit if the readiness check fails after a pull |
-| Configuration | Environment variables; the tool reads the catalogue and `config/local/microphone.toml` and passes them (`dotenv = false`) |
+| Configuration | Environment variables; the tool reads the catalogue and `config/local/microphone.toml` and writes them into the `.env` the service loads (`dotenv = true`) |
 | Secrets | None |
 | Network | Bind `127.0.0.1:8000` by default; `SERVICE_HOST=0.0.0.0` when Brain is on another machine, with the firewall as the only protection |
 | Start order | Independent of the other services; before Brain, which waits for `/available` of the microphone, STT, TTS and speaker |

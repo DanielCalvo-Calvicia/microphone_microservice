@@ -9,7 +9,7 @@ What exists today, checked against the code; anything else is stated as absent.
 | `GET /health` | `200`, `healthy: true` whenever the process answers; it touches no device |
 | `GET /available` | `200` always; `is_available` is true when the selected input device exists and has input channels, with a `reason` when it is not. It looks the device up without opening it. This is the **readiness** check of the deployment tool (`ready = "/available"`) and of Brain's start-up preflight |
 
-A machine without a usable microphone is reported as not ready: the deployment tool waits a grace period (15 s) and then reports the deploy as failed. There is no simulated device yet (`docs/proposals/PR-001-simulated-capture-backend.md`).
+A machine without a usable microphone is reported as not ready: the deployment tool waits a grace period (15 s) and then reports the deploy as failed. With `MICROPHONE_BACKEND=sim` (ADR-007) there is no device to miss: `/available` answers `is_available: true` with a `reason` that says `simulated microphone`, and the service logs **one warning at start**, `Microphone backend is simulated` (nothing new is logged for `real`). Brain reads the `reason` only when `is_available` is false, so Brain itself does not show it.
 
 ## Start and shutdown
 
@@ -44,3 +44,7 @@ All logs go through `shared_logging` (`get_logger(__name__)`, constant messages 
 - Persistence: the service writes no file; the utterances only travel on the stream.
 - Rate limiting and authentication: none.
 - State survives nothing: a restart returns to idle, and Brain must call `/start` again.
+
+## Stop with an open stream (R-16, fixed 2026-11-10)
+
+On SIGTERM (`docker stop`, Ctrl+C) uvicorn waits `GRACEFUL_SHUTDOWN_SECONDS` = 5 s for open requests, such as Brain's `/stream`, and then cancels them (it logs `Cancel 1 running task(s), timeout graceful shutdown exceeded` and an ERROR line for the cancelled request), after which `Server stopped; releasing microphone` and `Cleanup finished` are logged. Before the fix a connected consumer made `docker stop` wait for Docker's 10 s grace period and be killed.

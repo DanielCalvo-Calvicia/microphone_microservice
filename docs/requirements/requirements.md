@@ -8,7 +8,7 @@ Sources: `../CLAUDE.md` (the rules of the workspace), the contracts in `contract
 
 | ID | Requirement | Status | Where / record |
 |---|---|---|---|
-| FR-1 | Capture audio from the local input device through `sounddevice` / PortAudio and deliver it as mono 16-bit PCM. | Done, hardware pending | `infrastructure/outbound/sounddevice_capture/`, ADR-001 |
+| FR-1 | Capture audio from the local input device through `sounddevice` / PortAudio and deliver it as mono 16-bit PCM. | Done (run on a real microphone 2026-11-10, T-04.1) | `infrastructure/outbound/sounddevice_capture/`, ADR-001 |
 | FR-2 | Choose the device by `MICROPHONE_TARGET_KEYWORDS` (first input device whose name contains a keyword, case-insensitive); with no keyword or no match, the OS default input. | Done | `sounddevice_device_selector.py` |
 | FR-3 | Open the device in the requested format, else at the device's native rate, else (mono requests) as stereo at the native rate; a candidate that repeats an earlier one is skipped. | Done | `domain/operations/format_negotiation.py` |
 | FR-4 | Downmix what the device delivers to mono (mean of the frame, truncated toward zero). Channels requested above 1 are still delivered as mono. | Done | `domain/operations/pcm.py` |
@@ -37,8 +37,8 @@ Sources: `../CLAUDE.md` (the rules of the workspace), the contracts in `contract
 
 | ID | Requirement | Status | Where / record |
 |---|---|---|---|
-| FR-15 | A simulated capture backend behind the same ports, chosen by an environment variable (code default `real`), reported in `/available` and in the log, so a machine without a microphone can run and be deployed. | Planned | T-02, `docs/proposals/PR-001-simulated-capture-backend.md` |
-| FR-16 | Load `.env` at start (`python-dotenv`), then set `dotenv = true` in the deployment catalogue. | Planned | T-03.1, T-03.3, `docs/proposals/PR-002-dotenv-and-requirements-split.md` |
+| FR-15 | A simulated capture backend behind the same ports, chosen by an environment variable (code default `real`), reported in `/available` and in the log, so a machine without a microphone can run and be deployed. | Built and run 2026-11-10 (the real service, the pipeline check, Docker on amd64) | `infrastructure/outbound/sim_capture/`, `composition_root/dependencies/microphone_dependencies.py`, `tests/infrastructure/test_sim_audio_capture.py`, `tests/composition_root/test_backend_selection.py`, ADR-007, T-02, `docs/proposals/PR-001-simulated-capture-backend.md` |
+| FR-16 | Load `.env` at start (`python-dotenv`), then set `dotenv = true` in the deployment catalogue. | Done (2026-11-10) | `main_flow/http.py`, `tests/main_flow/test_environment.py`, T-03.1, T-03.3, T-06.1, `docs/proposals/PR-002-dotenv-and-requirements-split.md` |
 
 ## Non-functional
 
@@ -48,8 +48,8 @@ Sources: `../CLAUDE.md` (the rules of the workspace), the contracts in `contract
 | NFR-2 | Configuration only through environment variables, documented in `.env.example`; the bind host is configurable; no hardcoded port. | Done | `infrastructure/config/` |
 | NFR-3 | Logging only through `shared_logging`, with constant messages and keyword fields; audio is never logged. | Done | `docs/operations/monitoring.md` |
 | NFR-4 | Audio stays PCM16 mono; the only conversions are the downmix of what the device delivers and the optional resample. | Done | FR-4, FR-10 |
-| NFR-5 | Blocking device calls run off the event loop. | Done, hardware pending | `asyncio.to_thread` in the adapter |
-| NFR-6 | Wire types come from `contracts` (bundled wheel in `vendor/`, refreshed with `contracts/scripts/bundle.py`, currently 0.15.0). | Done | `vendor/`, `requirements.*.txt` |
-| NFR-7 | `ruff` and `mypy` (strict) clean; tests need no hardware. | Done | `pyproject.toml`; 142 tests |
+| NFR-5 | Blocking device calls run off the event loop. | Done (45 s on a real microphone, 0 overflows, 2026-11-10) | `asyncio.to_thread` in the adapter |
+| NFR-6 | Wire types come from `contracts` (bundled wheel in `vendor/`, refreshed with `contracts/scripts/bundle.py`, currently 0.16.0). | Done | `vendor/`, `requirements.*.txt` |
+| NFR-7 | `ruff` and `mypy` (strict) clean; tests need no hardware. | Done | `pyproject.toml`; 171 tests, mypy 56 files |
 | NFR-8 | Runs on Windows and on Linux / Raspberry Pi (`requirements.linux.txt`). | Windows works; Linux not run on real hardware | `docs/deployment/deployment.md` |
 | NFR-9 | Authentication between services. | Not designed (project-wide) | ADR-005, `docs/security/security.md` |

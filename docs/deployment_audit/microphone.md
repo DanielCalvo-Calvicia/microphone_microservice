@@ -45,3 +45,17 @@ Works on Windows; needs a hardware retest [D]. Linux/Pi unverified [U].
 - Hardware: real microphone on Windows (native) and on Linux/Pi (Docker with `/dev/snd`), measuring utterance cutting.
 - Same API/contract tests against `sim` and `real`.
 - `deployment`: a test that a layout with `MICROPHONE_BACKEND=sim` passes the readiness check without a device.
+
+## Update 2026-11-09
+
+Checked against the code and the tests the same day (see the facts F1 to F14 of [../tasks/README.md](../tasks/README.md)); this audit stays a record of 2026-11-04. What is still true: no simulated backend, `/available` false without a device and the 15 s grace (problems 1 and 2), no `python-dotenv`, dev tools and no versions in the runtime requirements (problem 3 and 4), Docker on a Windows host cannot reach the sound card (rejected by `host_validation.py:18`). What changed: 142 tests (not 127; the pre-roll was added, `MICROPHONE_PREROLL_SECONDS`, commit `fde20ad`), ruff and mypy clean (53 files), `contracts` 0.16.0 bundled (the venv still has 0.15.0). What was added that the audit missed: `sounddevice` is imported at module level by the composition root, so a `sim` backend needs a **lazy import** to start without PortAudio (the speaker's R-2 applies here too, task T-02.3); three tests of `deployment` depend on `dotenv = false`, not one. Plan: [../tasks/README.md](../tasks/README.md) revision 2; open decisions: [../questionnaires/Q02_deployment-readiness.md](../questionnaires/Q02_deployment-readiness.md). Linux and Raspberry Pi are postponed until the services work at 100 % on Windows.
+
+## Update 2026-11-10
+
+The recommended changes were made (plan: [../tasks/README.md](../tasks/README.md), decisions: [../decisions/ADR-007-simulated-capture-backend.md](../decisions/ADR-007-simulated-capture-backend.md)): (1) `MICROPHONE_BACKEND=real|sim`, code default `real`, `sim` through a catalogue preset in `deployment`, `/available` says `simulated microphone` in its `reason` and the service logs a warning at start (the `sounddevice` adapter is imported only for `real`, so `sim` needs no PortAudio); (2) `python-dotenv` and `dotenv = true` (three tests of `deployment` changed with it); (3) the requirements split (`requirements-dev.txt`) with exact pins; a new catalogue key `simulated_when` lets a simulated microphone run in Docker on Windows (the rejection stays for `real`). Run: 169 unit tests, the workspace pipeline check (84 passed, 18 skipped) and the real service on `sim` in a scratch folder with every endpoint called (no sound device). **Not run:** Docker (T-07), a real microphone (T-04.1, T-04.2), Linux and the Raspberry Pi (postponed). The audit's problems 1 to 4 are fixed in code; "Works on Windows; needs a hardware retest" is still true.
+
+## Update 2026-11-10 (Docker)
+
+The Docker acceptance on amd64 with `sim` was run (tasks T-07.1 to T-07.4, details in [../deployment/deployment.md](../deployment/deployment.md)): the image builds in 41 s (317 MB), the deploy passes the readiness check without a device and prints the simulated note, every endpoint answers, restart and recreate work, the image holds no dev tool and no secret. It also found that `docker stop` with a connected `/stream` consumer is killed after the 10 s grace period. Still not run: `--device /dev/snd`, Linux, arm64 (postponed) and a real microphone.
+
+> **Update 2026-11-10 (stop):** the `docker stop` finding above was fixed the same day with a 5 s graceful-shutdown timeout; with a connected `/stream` consumer the stop now takes 5.69 s and exits with code 0.

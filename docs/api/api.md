@@ -66,7 +66,7 @@ Releases the device and ends the open `/stream` (with `completed`). Idempotent: 
 
 ## `GET /available`
 
-`data` is `AvailabilityResponse{is_available, reason}`: the selected device (first keyword match of `MICROPHONE_TARGET_KEYWORDS`, else the OS default input) is looked up and must have input channels; the device is **not opened**. `reason` is `null` when available. The answer is `200` in both cases. The deployment tool uses this route as its readiness check, and Brain's start-up preflight too.
+`data` is `AvailabilityResponse{is_available, reason}`: the selected device (first keyword match of `MICROPHONE_TARGET_KEYWORDS`, else the OS default input) is looked up and must have input channels; the device is **not opened**. `reason` is `null` when available on a real device. With `MICROPHONE_BACKEND=sim` the answer is `is_available: true` and `reason` is `"simulated microphone (MICROPHONE_BACKEND=sim): a generated signal, not a real device"`: the deployment tool prints it as `healthy and available, warning: ...` and it never makes the service unavailable. The answer is `200` in all cases. The deployment tool uses this route as its readiness check, and Brain's start-up preflight too.
 
 ## `GET /health`
 

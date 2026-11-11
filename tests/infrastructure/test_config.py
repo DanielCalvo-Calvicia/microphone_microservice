@@ -1,3 +1,5 @@
+import pytest
+
 from domain.value_objects.input_treatment import InputTreatment
 from infrastructure.config.microphone_config import MicrophoneConfig
 from infrastructure.config.server_config import ServerConfig
@@ -89,3 +91,15 @@ def test_a_negative_pre_roll_is_refused_at_startup():
 
     with pytest.raises(InvalidInputTreatment):
         MicrophoneConfig.from_env({"MICROPHONE_PREROLL_SECONDS": "-0.1"})
+
+
+def test_the_backend_defaults_to_real_and_reads_sim():
+    assert MicrophoneConfig.from_env({}).backend == "real"
+    assert MicrophoneConfig.from_env({"MICROPHONE_BACKEND": "  SIM "}).backend == "sim"
+    assert MicrophoneConfig.from_env({"MICROPHONE_BACKEND": "real"}).backend == "real"
+    assert MicrophoneConfig.from_env({"MICROPHONE_BACKEND": ""}).backend == "real"
+
+
+def test_an_unknown_backend_stops_the_start_and_names_the_variable():
+    with pytest.raises(ValueError, match="MICROPHONE_BACKEND"):
+        MicrophoneConfig.from_env({"MICROPHONE_BACKEND": "fake"})
