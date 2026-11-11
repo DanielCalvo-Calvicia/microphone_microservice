@@ -1,108 +1,73 @@
-"""HTTP inbound adapter: decode -> call the inbound port -> encode. No business rules."""
+"""HTTP inbound adapter: declares the endpoints and wires each one to its route.
 
-import time
+No request logic of its own.
+"""
 
-from contracts.api.microservices.common.availability import AvailabilityResponse
-from contracts.api.microservices.common.health_check import HealthCheckResponse
-from contracts.api.microservices.microphone.start import MicrophoneConfig
-from fastapi import APIRouter, status
+from fastapi import APIRouter
 from fastapi.responses import JSONResponse, StreamingResponse
-from pydantic import BaseModel
 
-from application.dtos.start_stream_inbound import StartStreamInboundDTO
-from application.errors import FormatMismatch
-from application.ports.inbound.microphone_streaming_port import MicrophoneStreamingPort
-from infrastructure.inbound.http.http_envelope import failure, success
-from infrastructure.inbound.http.ndjson_audio_events import NDJSON_MEDIA_TYPE, ndjson_audio_events
-
-_DEFAULTS = StartStreamInboundDTO()
-
-
-class StartStreamBody(BaseModel):
-    """HTTP transport model for ``POST /start``. Never crosses into application/."""
-
-    sample_rate: int = _DEFAULTS.sample_rate
-    channels: int = _DEFAULTS.channels
-    chunk_size: int = _DEFAULTS.chunk_size
+from application.dtos.inbound.start_stream_inbound import StartStreamInboundDTO
+from application.dtos.outbound.stream_outbound import StreamOutboundDTO
+from application.ports.inbound.microphone_inbound_port import MicrophoneInboundPort
+from application.ports.service.microphone_service_port import MicrophoneServicePort
+from infrastructure.inbound.http.routes.available import handle_available
+from infrastructure.inbound.http.routes.get_stream import handle_get_stream
+from infrastructure.inbound.http.routes.health import handle_health
+from infrastructure.inbound.http.routes.start_stream import StartStreamBody, handle_start_stream
+from infrastructure.inbound.http.routes.stop import handle_stop
 
 
-class MicrophoneHandler:
-    def __init__(self, port: MicrophoneStreamingPort) -> None:
-        self._port = port
+class MicrophoneHandler(MicrophoneInboundPort):
+    """The HTTP inbound adapter. It declares which endpoints exist and wires each to its function in
+    ``routes/``; the answers and the error mapping live in ``response/`` and ``errors/``.
+    Its operations are those of ``MicrophoneInboundPort`` (DTOs, no HTTP types) and the routes call
+    them."""
+
+    def __init__(self, service: MicrophoneServicePort) -> None:
+        self._service = service
         self.router = APIRouter()
-        self.router.add_api_route("/start", self.handle_start, methods=["POST"])
-        self.router.add_api_route("/stop", self.handle_stop, methods=["POST"])
-        self.router.add_api_route("/available", self.handle_available, methods=["GET"])
-        self.router.add_api_route(
-            "/stream", self.handle_stream, methods=["GET"], response_model=None
-        )
-        self.router.add_api_route("/health", self.handle_health, methods=["GET"], tags=["Health"])
+        self._register_routes()
 
-    async def handle_start(self, body: StartStreamBody) -> JSONResponse:
-        try:
-            result = await self._port.start_stream(
-                StartStreamInboundDTO(
-                    sample_rate=body.sample_rate,
-                    channels=body.channels,
-                    chunk_size=body.chunk_size,
-                )
-            )
-        except Exception as error:
-            return failure("start_stream", "Failed to start microphone stream", error)
-        return success(
-            "start_stream",
-            "Microphone stream started successfully",
-            MicrophoneConfig(
-                sample_rate=result.sample_rate, channels=1, chunk_size=body.chunk_size
-            ),  # the accepted configuration
-        )
+    def _register_routes(self) -> None:
+        inbound: MicrophoneInboundPort = self
+        add = self.router.add_api_route
 
-    async def handle_stop(self) -> JSONResponse:
-        try:
-            await self._port.stop_stream()
-        except Exception as error:
-            return failure("stop_stream", "Failed to stop microphone stream", error)
-        return success("stop_stream", "Microphone stream stopped successfully", True)
+        async def health() -> JSONResponse:
+            return await handle_health(inbound)
 
-    async def handle_available(self) -> JSONResponse:
-        """Whether an input device is usable (probed without opening it)."""
-        try:
-            available, reason = await self._port.check_device()
-        except Exception as error:
-            return failure("check_availability", "Failed to check microphone availability", error)
-        return success(
-            "check_availability",
-            "Microphone availability checked successfully",
-            AvailabilityResponse(is_available=available, reason=reason),
-        )
+        async def available() -> JSONResponse:
+            return await handle_available(inbound)
 
-    async def handle_stream(
-        self, sample_rate: int | None = None, chunk_size: int | None = None
-    ) -> StreamingResponse | JSONResponse:
-        """The event stream of the capture started with ``POST /start``.
+        async def stop() -> JSONResponse:
+            return await handle_stop(inbound)
 
-        The format was fixed by ``/start``; ``sample_rate`` repeated here must match it.
-        """
-        try:
-            result = self._port.current_stream()
-            if sample_rate is not None and sample_rate != result.sample_rate:
-                raise FormatMismatch(
-                    f"sample_rate={sample_rate} differs from the capture's {result.sample_rate}"
-                )
-        except Exception as error:
-            return failure("get_stream", "Failed to retrieve microphone stream", error)
-        return StreamingResponse(
-            ndjson_audio_events(result.stream, result.sample_rate),
-            media_type=NDJSON_MEDIA_TYPE,
-            status_code=status.HTTP_200_OK,
-            headers={
-                "X-Sample-Rate": str(result.sample_rate),
-                "X-Action": "get_stream",
-                "X-Status": "success",
-                "X-Message": "Microphone stream retrieved successfully",
-                "X-Timestamp": str(time.time()),
-            },
-        )
+        async def start(body: StartStreamBody) -> JSONResponse:
+            return await handle_start_stream(body, inbound)
 
-    async def handle_health(self) -> JSONResponse:
-        return success("health_check", "Service is healthy", HealthCheckResponse(healthy=True))
+        async def get_stream(
+            sample_rate: int | None = None, chunk_size: int | None = None
+        ) -> StreamingResponse | JSONResponse:
+            return await handle_get_stream(inbound, sample_rate)
+
+        add("/health", health, methods=["GET"], tags=["Health"])
+        add("/available", available, methods=["GET"])
+        add("/start", start, methods=["POST"])
+        add("/stop", stop, methods=["POST"])
+        add("/stream", get_stream, methods=["GET"], response_model=None)
+
+    # --- MicrophoneInboundPort: the operations every inbound adapter offers -----------------------
+
+    def health(self) -> bool:
+        return True
+
+    async def check_device(self) -> tuple[bool, str | None]:
+        return await self._service.check_device()
+
+    async def start_stream(self, request: StartStreamInboundDTO) -> StreamOutboundDTO:
+        return await self._service.start_stream(request)
+
+    async def stop_stream(self) -> None:
+        await self._service.stop_stream()
+
+    def current_stream(self) -> StreamOutboundDTO:
+        return self._service.current_stream()

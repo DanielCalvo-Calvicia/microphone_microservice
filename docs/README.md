@@ -11,7 +11,7 @@
 | [deployment/deployment.md](deployment/deployment.md) | How the deployment tool runs it; Windows, Linux, Docker |
 | [tasks/README.md](tasks/README.md) | The task plan: protocol, baseline definition of done, board; [tasks/ORDER.md](tasks/ORDER.md) is the order to follow, with the state and the last update of every task |
 | [setup/00_README.md](setup/00_README.md) | The project context in 17 ordered sub-forms (identity, purpose, scope, services, inputs and outputs, domain, technology, architecture, runtime, quality, decisions, risks, sources, work items) |
-| [setup/questionnaires/](setup/questionnaires/00_README.md) | Questions for the maintainer; [Q01](setup/questionnaires/Q01_open-questions.md) holds the ones that stop tasks |
+| [questionnaires/](questionnaires/00_README.md) | Questions for the maintainer; [Q01](questionnaires/Q01_open-questions.md) holds the ones that stop tasks |
 | [decisions/](decisions/) | Architecture decision records (ADR-001 to ADR-007) |
 | [proposals/](proposals/) | Changes proposed and not built (PR-001 simulated backend, PR-002 `.env` and requirements) |
 | [deployment_audit/microphone.md](deployment_audit/microphone.md) | Audit of 2026-11-04 from the deployment side: the source of the proposals |

@@ -15,7 +15,7 @@ Entry `[services.microphone]` of `deployment/config/catalogue.toml` (not edited 
 | `simulated_when` | `{ MICROPHONE_BACKEND = "sim" }` | With that resolved setting the service uses no sound device: it may run in Docker on Windows and gets no `--device /dev/snd`. Judged on the resolved value (catalogue preset or local file), never on the name |
 | `[env]` | `MICROPHONE_BACKEND = "sim"` | A **default deploy runs the simulated microphone** (ADR-007): a machine without a sound card passes the readiness check and `/available` says `simulated microphone` in its `reason` (the tool prints `healthy and available, warning: ...`). **The machine with the microphone must set `MICROPHONE_BACKEND = "real"` in `config/local/microphone.toml`**, or the robot is healthy and deaf |
 | `libraries` | `shared-logging` | Installed in editable mode next to the service |
-| `requirements` | `requirements.windows.txt` / `requirements.linux.txt` | Per platform; runtime only, exact versions. The tests and lint tools are in `requirements-dev.txt`, which the tool never installs |
+| `requirements` | `requirements.windows.txt` / `requirements.linux.txt` | Per platform; runtime only, exact versions. The tests and lint tools are in `requirements.dev.txt`, which the tool never installs |
 | `apt` | `libportaudio2`, `portaudio19-dev` | System packages on Linux |
 | `dotenv` | `true` (the default; no key in the catalogue) | The service loads the `.env` in its own folder itself (since 2026-11-10); the tool writes it, and in Docker bind-mounts it read-only at `/app/.env` |
 

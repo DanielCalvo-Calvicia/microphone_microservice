@@ -11,3 +11,5 @@ The service follows the layout shared by all OBLIVION services: `main.py`, `main
 ## Consequences
 - Positive: everything but the real driver is tested without hardware; the hardware library is imported in one module.
 - Negative: more files for a small service; the real driver still needs a manual hardware run (`tests/simple.py`).
+
+> **Update 2026-11-11:** the code layout was restructured to mirror `stt_microservice`: DTOs in `application/dtos/{inbound,outbound}`, `MicrophoneStreamingPort` became `MicrophoneServicePort` (`application/ports/service/`) and a new `MicrophoneInboundPort` is implemented by the HTTP handler, the HTTP adapter is split into `routes/`, `response/` and `errors/`, and `composition_root/dependencies/microphone_dependencies.py` became one file per object. The current paths are in [architecture.md](../architecture/architecture.md) section 4.

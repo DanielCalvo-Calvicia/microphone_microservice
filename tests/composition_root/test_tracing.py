@@ -17,7 +17,9 @@ def _app(monkeypatch):
     for name in (
         "infrastructure.outbound.sounddevice_capture.sounddevice_audio_stream",
         "infrastructure.outbound.sounddevice_capture.sounddevice_audio_capture",
-        "composition_root.dependencies.microphone_dependencies",
+        "composition_root.dependencies.audio_capture_dependency",
+        "composition_root.dependencies.http_app_dependency",
+        "composition_root.dependencies.microphone_service_dependency",
         "composition_root.containers.http_container",
     ):
         monkeypatch.delitem(sys.modules, name, raising=False)

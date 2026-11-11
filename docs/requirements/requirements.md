@@ -28,9 +28,9 @@ Sources: `../CLAUDE.md` (the rules of the workspace), the contracts in `contract
 
 | ID | Requirement | Status | Where / record |
 |---|---|---|---|
-| FR-11 | `POST /start` (optional `sample_rate`, `channels`, `chunk_size`), `POST /stop` (idempotent, no body needed), `GET /available` (probe without opening the device), `GET /health`. | Done | `http_handler.py`, `docs/api/api.md` |
+| FR-11 | `POST /start` (optional `sample_rate`, `channels`, `chunk_size`), `POST /stop` (idempotent, no body needed), `GET /available` (probe without opening the device), `GET /health`. | Done | `http_handler.py`, `routes/`, `docs/api/api.md` |
 | FR-12 | `GET /stream` answers NDJSON `contracts.stream` events: `stream_started`, one `utterance` per utterance (`bytes_base64`, `sample_rate`), then `completed` (`output_bytes_base64` empty) or an `error` event (`capture_failed`, not recoverable). A `sample_rate` query that differs from the capture's is refused. | Done | `ndjson_audio_events.py`, ADR-002 |
-| FR-13 | Non-stream answers use the envelope `action / status / status_code / message / timestamp / data` (`ApiEnvelope`); failures map to 409, 422, 503 or 500. | Done | `http_envelope.py`, `http_error_mapper.py`, ADR-004 |
+| FR-13 | Non-stream answers use the envelope `action / status / status_code / message / timestamp / data` (`ApiEnvelope`); failures map to 409, 422, 503 or 500. | Done | `response/http_envelope.py`, `errors/http_error_mapper.py`, ADR-004 |
 | FR-14 | Only Brain calls the service; the service calls no other service. | Done | `../CLAUDE.md`; the code has no outbound HTTP |
 
 ## Functional: planned
@@ -50,6 +50,6 @@ Sources: `../CLAUDE.md` (the rules of the workspace), the contracts in `contract
 | NFR-4 | Audio stays PCM16 mono; the only conversions are the downmix of what the device delivers and the optional resample. | Done | FR-4, FR-10 |
 | NFR-5 | Blocking device calls run off the event loop. | Done (45 s on a real microphone, 0 overflows, 2026-11-10) | `asyncio.to_thread` in the adapter |
 | NFR-6 | Wire types come from `contracts` (bundled wheel in `vendor/`, refreshed with `contracts/scripts/bundle.py`, currently 0.16.0). | Done | `vendor/`, `requirements.*.txt` |
-| NFR-7 | `ruff` and `mypy` (strict) clean; tests need no hardware. | Done | `pyproject.toml`; 171 tests, mypy 56 files |
+| NFR-7 | `ruff` and `mypy` (strict) clean; tests need no hardware. | Done | `pyproject.toml`; 184 tests, mypy 71 files |
 | NFR-8 | Runs on Windows and on Linux / Raspberry Pi (`requirements.linux.txt`). | Windows works; Linux not run on real hardware | `docs/deployment/deployment.md` |
 | NFR-9 | Authentication between services. | Not designed (project-wide) | ADR-005, `docs/security/security.md` |

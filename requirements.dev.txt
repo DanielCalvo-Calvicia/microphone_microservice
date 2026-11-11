@@ -2,7 +2,7 @@
 # requirements.windows.txt / requirements.linux.txt (config/catalogue.toml of the deployment repo).
 # Install on top of the runtime file:
 #     pip install -r requirements.windows.txt   (requirements.linux.txt on Linux)
-#     pip install -r requirements-dev.txt
+#     pip install -r requirements.dev.txt
 
 pytest>=9.0.0
 # imported by the tests (TestClient needs it) and tests/simple.py; the service does not need it

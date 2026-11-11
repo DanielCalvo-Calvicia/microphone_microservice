@@ -36,8 +36,9 @@ composition_root  ──▶  infrastructure  ──▶  application  ──▶  
 Source dependencies point inward only. At run time the calls go outward (HTTP, then the service, then the hardware) through ports owned by `application`:
 
 ```
-HTTP handler ──▶ MicrophoneStreamingPort ◀── MicrophoneService ──▶ AudioCapturePort ◀── SoundDeviceAudioCapture ──▶ sounddevice
-(inbound)        (driving port)               (application)         (driven port)         (outbound)
+MicrophoneHandler ──▶ MicrophoneServicePort ◀── MicrophoneService ──▶ AudioCapturePort ◀── SoundDeviceAudioCapture ──▶ sounddevice
+(inbound, via its     (service port)            (application)         (driven port)         (outbound)
+ MicrophoneInboundPort)
                                                    │
                                                    ▼
                        domain: Microphone, AudioFormat, InputTreatment, UtteranceSegmenter, pcm / level / resample / format_negotiation
@@ -50,9 +51,9 @@ Wire format: the stream is NDJSON, one `contracts.stream` event per line, encode
 | Layer | Responsibility |
 |---|---|
 | `main.py`, `main_flow/` | Read the config, init logging (`init_logging("microphone")`), run uvicorn, and on shutdown release the device. No wiring and no rules. |
-| `composition_root/` | The only place concrete adapters are chosen and connected (`new_audio_capture`, `new_microphone_service`, `new_http_app`, `HttpContainer`). |
+| `composition_root/` | The only place concrete adapters are chosen and connected (`new_audio_capture`, `new_microphone_service`, `new_http_app`, one file each in `dependencies/`, and `HttpContainer`). |
 | `infrastructure/config` | `ServerConfig` and `MicrophoneConfig`: environment variables into frozen dataclasses. |
-| `infrastructure/inbound/http` | FastAPI handler, envelope answers, error to status mapping, the NDJSON event framing. Decode, call the port, encode. |
+| `infrastructure/inbound/http` | `http_handler.py` declares the endpoints (it implements `MicrophoneInboundPort`); `routes/` has one function per endpoint, `response/` the envelope answers, the NDJSON event framing and the stream headers, `errors/` the error to status mapping. Decode, call the port, encode. |
 | `infrastructure/outbound/sim_capture` | The simulated device behind the same ports (`MICROPHONE_BACKEND=sim`, ADR-007): `sim_audio_capture.py` (`SimAudioCapture`, its `check_device` returns the note for `/available`) and `sim_audio_stream.py` (a generated pattern paced like a device; no `sounddevice`, no PortAudio). |
 | `infrastructure/outbound/sounddevice_capture` | The hardware adapter behind `AudioCapturePort` / `AudioStreamPort`: driver, device selector, stream, error mapper. The only module that imports `sounddevice` is `sounddevice_driver.py`. |
 | `application` | `MicrophoneService` (orchestration under a lock, no rules of its own), `utterances_of` (feeds the segmenter), ports, DTOs, application errors. |
@@ -65,15 +66,18 @@ main.py                              entry point: asyncio.run(run_http())
 main_flow/
   http.py                            config -> logging -> container -> uvicorn -> cleanup (stop_stream) in finally
 composition_root/
-  dependencies/microphone_dependencies.py   new_audio_capture, new_microphone_service, new_http_app (adds TracingMiddleware)
-  containers/http_container.py              HttpContainer(app, microphone), new_http_container
+  dependencies/audio_capture_dependency.py       new_audio_capture (sim or sounddevice, ADR-007)
+  dependencies/microphone_service_dependency.py  new_microphone_service
+  dependencies/http_app_dependency.py            new_http_app (adds TracingMiddleware)
+  containers/http_container.py                   HttpContainer(app, microphone), new_http_container
 application/
   errors.py                          ApplicationError, MicrophoneUnavailable, StreamCloseFailed, StreamReadFailed, FormatMismatch
-  dtos/start_stream_inbound.py       StartStreamInboundDTO(sample_rate=16000, channels=1, chunk_size=1024)
-  dtos/stream_outbound.py            StreamOutboundDTO(sample_rate, stream)
-  ports/inbound/microphone_streaming_port.py   MicrophoneStreamingPort (driving)
-  ports/outbound/audio_capture_port.py         AudioCapturePort (driven)
-  ports/outbound/audio_stream_port.py          AudioStreamPort (driven)
+  dtos/inbound/start_stream_inbound.py     StartStreamInboundDTO(sample_rate=16000, channels=1, chunk_size=1024)
+  dtos/outbound/stream_outbound.py         StreamOutboundDTO(sample_rate, stream)
+  ports/inbound/microphone_inbound_port.py MicrophoneInboundPort (what every inbound adapter offers)
+  ports/service/microphone_service_port.py MicrophoneServicePort (the use cases; MicrophoneService implements it)
+  ports/outbound/audio_capture_port.py     AudioCapturePort (driven)
+  ports/outbound/audio_stream_port.py      AudioStreamPort (driven)
   services/microphone_service.py     MicrophoneService
   services/utterance_stream.py       utterances_of(chunks, segmenter)
 domain/
@@ -88,16 +92,19 @@ domain/
   operations/format_negotiation.py   fallback_formats
 infrastructure/
   config/                            server_config.py, microphone_config.py
-  inbound/http/                      http_handler.py, http_envelope.py, http_error_mapper.py, ndjson_audio_events.py
+  inbound/http/                      http_handler.py (MicrophoneHandler)
+    routes/                          health.py, available.py, start_stream.py, stop.py, get_stream.py (one handle_* each)
+    response/                        http_envelope.py, stream_events.py (ndjson_audio_events), stream_headers.py
+    errors/                          http_error_mapper.py
   outbound/sim_capture/              sim_audio_capture.py, sim_audio_stream.py (MICROPHONE_BACKEND=sim)
   outbound/sounddevice_capture/      audio_driver.py (protocol), sounddevice_driver.py, sounddevice_device_selector.py,
                                      sounddevice_audio_capture.py, sounddevice_audio_stream.py, sounddevice_error_mapper.py
-tests/                               domain, application, infrastructure, composition_root, architecture; simple.py (needs a real microphone)
+tests/                               domain, application, infrastructure, composition_root, main_flow, architecture (dependency rules, DTOs, ports); simple.py (needs a real microphone)
 ```
 
 ## 5. Control flow
 
-**Start (`POST /start`).** The handler builds a `StartStreamInboundDTO` and calls `MicrophoneService.start_stream` under the service lock: `Microphone.ensure_idle()` (409 if already capturing), `AudioCapturePort.open_stream(requested)` (tries `fallback_formats`, 503 if nothing opens), `Microphone.start(negotiated format)`, then an `UtteranceSegmenter` is built for the device rate and the stream is wrapped by `utterances_of`. The answer carries the rate of what will be **sent**, which is `MICROPHONE_RESAMPLE_TO_HZ` when it is set. The service registers `on_terminated` on the raw stream.
+**Start (`POST /start`).** `routes/start_stream.py` builds a `StartStreamInboundDTO` and, through the handler, calls `MicrophoneService.start_stream` under the service lock: `Microphone.ensure_idle()` (409 if already capturing), `AudioCapturePort.open_stream(requested)` (tries `fallback_formats`, 503 if nothing opens), `Microphone.start(negotiated format)`, then an `UtteranceSegmenter` is built for the device rate and the stream is wrapped by `utterances_of`. The answer carries the rate of what will be **sent**, which is `MICROPHONE_RESAMPLE_TO_HZ` when it is set. The service registers `on_terminated` on the raw stream.
 
 **Stream (`GET /stream`).** `current_stream()` (409 if not capturing); a `sample_rate` query that differs from the capture's is a `FormatMismatch` (422). The handler returns a `StreamingResponse` over `ndjson_audio_events`: `stream_started`, one `utterance` per finished utterance, then `completed` (`output_bytes_base64` always empty), or an `error` event (`capture_failed`, not recoverable) if reading fails.
 
@@ -111,7 +118,8 @@ tests/                               domain, application, infrastructure, compos
 
 | Port | Direction | Methods |
 |---|---|---|
-| `MicrophoneStreamingPort` | driving (HTTP uses it) | `start_stream(StartStreamInboundDTO) -> StreamOutboundDTO`, `stop_stream()`, `is_available()`, `current_stream()`, `check_device() -> (ok, reason)` |
+| `MicrophoneInboundPort` | what every inbound adapter offers (`MicrophoneHandler` implements it; HTTP today) | `health()`, `check_device() -> (ok, reason)`, `start_stream(StartStreamInboundDTO) -> StreamOutboundDTO`, `stop_stream()`, `current_stream()` |
+| `MicrophoneServicePort` | the use cases (`MicrophoneService` implements it; the handler calls it) | `start_stream(StartStreamInboundDTO) -> StreamOutboundDTO`, `stop_stream()`, `is_available()`, `current_stream()`, `check_device() -> (ok, reason)` |
 | `AudioCapturePort` | driven | `open_stream(AudioFormat) -> AudioStreamPort`, `check_device() -> (ok, reason)` |
 | `AudioStreamPort` | driven | `sample_rate`, `__aiter__` (mono PCM16 chunks), `on_terminated(callback)`, `close()` (idempotent) |
 | `AudioDriver` (adapter-internal protocol) | seam faked in tests | `input_devices`, `default_input_index`, `device_info`, `open_input` |
@@ -136,16 +144,16 @@ The HTTP routes are documented in `docs/api/api.md`.
 
 ## 9. Design patterns
 
-- **Ports and adapters** (hexagonal): `MicrophoneStreamingPort` driving, `AudioCapturePort` / `AudioStreamPort` driven, a driver protocol as the test seam.
+- **Ports and adapters** (hexagonal): `MicrophoneInboundPort` and `MicrophoneServicePort` driving, `AudioCapturePort` / `AudioStreamPort` driven, a driver protocol as the test seam.
 - **State machine** in the `Microphone` entity (idle or capturing; start only when idle; stop is idempotent).
 - **Strategy by configuration**: the treatments are flags of an immutable `InputTreatment`, not subclasses.
 - **Composition root**: one function per concrete choice; tests build the container with fake drivers.
-- **Error translation at the edge**: domain and application errors are mapped to HTTP statuses only in `http_error_mapper.py`; the sounddevice errors are wrapped by `sounddevice_error_mapper.py`.
+- **Error translation at the edge**: domain and application errors are mapped to HTTP statuses only in `errors/http_error_mapper.py`; the sounddevice errors are wrapped by `sounddevice_error_mapper.py`.
 - **Blocking calls off the loop**: device discovery, open, read and close run through `asyncio.to_thread`.
 
 ## 10. Dependency rules
 
-`tests/architecture/test_dependency_rules.py` parses the imports and enforces:
+`tests/architecture/test_dependency_rules.py` parses the imports and enforces the table below; `test_dtos.py` enforces that every DTO sits in `application/dtos/inbound` or `outbound` and is named for its folder, and `test_ports.py` that the service and every adapter implement their port and that the ports are the contract (the same fitness functions as stt):
 
 | Layer | May import | Must not import |
 |---|---|---|
@@ -181,7 +189,7 @@ Brain          handler            MicrophoneService      SoundDeviceAudioCapture
 3. **No authentication.** Service-to-service authentication is not designed for the project.
 4. **The sounddevice adapter was run on a real headset microphone on 2026-11-10 (T-04.1)**; before that it was unvalidated since the last changes (it is tested against a fake `AudioDriver`; `tests/simple.py` needs a real microphone). The silence thresholds are not tuned on real rooms either.
 5. ~~No `.env` loading~~ **Fixed 2026-11-10 (T-03.1):** `main_flow/http.py` `load_environment` reads the `.env` next to `main.py` (`python-dotenv`), and the catalogue says `dotenv = true`.
-6. ~~Dev tools in the runtime requirements~~ **Fixed 2026-11-09 (T-03.2):** they are in `requirements-dev.txt`, and the four runtime packages are pinned exactly. Transitive packages are not locked.
+6. ~~Dev tools in the runtime requirements~~ **Fixed 2026-11-09 (T-03.2):** they are in `requirements.dev.txt`, and the four runtime packages are pinned exactly. Transitive packages are not locked.
 7. **A mid-stream device failure loses the utterance in progress.**
 8. **`MICROPHONE_SHOW_METER` defaults to `true`**: the console meter writes to stdout on every chunk, which is noise in a service log; set it to `false` outside a manual test.
 9. **`chunk_size` on `/stream`** is accepted and ignored (the capture's value is fixed by `/start`).

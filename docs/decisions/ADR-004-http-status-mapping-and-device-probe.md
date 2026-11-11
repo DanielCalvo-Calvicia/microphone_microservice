@@ -11,3 +11,5 @@ Failures are mapped in one place (`http_error_mapper.py`): 409 capture already a
 ## Consequences
 - Positive: Brain and the deployment tool can tell "no microphone" from a bug; the probe is cheap and does not disturb a running capture.
 - Negative: a machine without a microphone is reported as not ready (see PR-001).
+
+> **Update 2026-11-11:** the mapper moved to `infrastructure/inbound/http/errors/http_error_mapper.py` (the code layout now mirrors stt; see ADR-001). The mapping itself is unchanged.

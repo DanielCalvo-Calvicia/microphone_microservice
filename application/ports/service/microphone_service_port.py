@@ -1,11 +1,13 @@
 from abc import ABC, abstractmethod
 
-from application.dtos.start_stream_inbound import StartStreamInboundDTO
-from application.dtos.stream_outbound import StreamOutboundDTO
+from application.dtos.inbound.start_stream_inbound import StartStreamInboundDTO
+from application.dtos.outbound.stream_outbound import StreamOutboundDTO
 
 
-class MicrophoneStreamingPort(ABC):
-    """What the outside world may ask of the application."""
+class MicrophoneServicePort(ABC):
+    """The service's own port: the microphone use cases. ``MicrophoneService`` implements it; the
+    inbound adapters call it (through the inbound port); nothing else in the application knows the
+    concrete service."""
 
     @abstractmethod
     async def start_stream(self, request: StartStreamInboundDTO) -> StreamOutboundDTO:

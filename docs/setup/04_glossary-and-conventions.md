@@ -16,7 +16,7 @@
 | Negotiated rate | The sample rate the device accepted, possibly different from the requested one |
 | Event | One NDJSON line of `contracts.stream` (`stream_started`, `utterance`, `completed`, `error`) |
 | Envelope | `ApiEnvelope`: `action / status / status_code / message / timestamp / data`, the shape of every non-stream answer |
-| Driving / driven port | The port the outside calls (`MicrophoneStreamingPort`) / the port the application calls (`AudioCapturePort`, `AudioStreamPort`) |
+| Driving / driven port | The ports the outside calls (`MicrophoneInboundPort`, `MicrophoneServicePort`) / the port the application calls (`AudioCapturePort`, `AudioStreamPort`) |
 | Brain | The only coordinator of OBLIVION; the only caller of this service |
 
 ## Naming and language

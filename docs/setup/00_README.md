@@ -3,7 +3,7 @@
 The project context, split into ordered sub-forms in the format of `dynamics_microservice` (`docs/setup/`). Read or fill them **in numeric order**: each one builds on the previous ones (what the project is, who it talks to, how it is built, how it runs, what is decided and pending). Written on 2026-11-05 from the code, the git history, the deployment tool and the deployment audit of 2026-11-04.
 
 **Rules**
-- Never invent answers. Unknown: `UNKNOWN`. Not relevant: `NOT APPLICABLE`. Something that only the maintainer can say: it is a question in [questionnaires/](questionnaires/00_README.md), not an answer.
+- Never invent answers. Unknown: `UNKNOWN`. Not relevant: `NOT APPLICABLE`. Something that only the maintainer can say: it is a question in [questionnaires/](../questionnaires/00_README.md), not an answer.
 - No secrets, tokens or credentials in any file. The `.env`, `.env.staging` and `.env.production` files were not opened.
 - Every fact comes from a file of this repository, the workspace (`../CLAUDE.md`, `../deployment`, `../contracts`) or a commit; where it does not, it says so.
 - **Not pushed anywhere.** The `.engram/` folder of this repository is stale (see file 15) and Engram Cloud is not used for this project; nothing here was sent to it.

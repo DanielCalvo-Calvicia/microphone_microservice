@@ -29,7 +29,9 @@ def build(module, **env: str):
 
 
 def test_sim_starts_with_sounddevice_unimportable_and_nothing_imports_it(monkeypatch):
-    module = fresh_container_module(monkeypatch, None)  # `import sounddevice` now raises ImportError
+    module = fresh_container_module(
+        monkeypatch, None
+    )  # `import sounddevice` now raises ImportError
     with pytest.raises(ImportError):
         import sounddevice  # noqa: F401
 
@@ -78,7 +80,7 @@ class RecordingLogger:
 
 
 def test_sim_is_announced_once_at_start_with_a_warning_and_real_logs_nothing_new(monkeypatch):
-    from composition_root.dependencies import microphone_dependencies as deps
+    from composition_root.dependencies import audio_capture_dependency as deps
 
     recorder = RecordingLogger()
     monkeypatch.setattr(deps, "logger", recorder)
@@ -93,7 +95,7 @@ def test_sim_is_announced_once_at_start_with_a_warning_and_real_logs_nothing_new
 
 
 def test_the_sim_wiring_builds_the_adapter_with_the_documented_pattern(monkeypatch):
-    from composition_root.dependencies import microphone_dependencies as deps
+    from composition_root.dependencies import audio_capture_dependency as deps
     from infrastructure.outbound.sim_capture.sim_audio_capture import (
         QUIET_CHUNKS,
         TONE_CHUNKS,
@@ -103,5 +105,8 @@ def test_the_sim_wiring_builds_the_adapter_with_the_documented_pattern(monkeypat
     capture = deps.new_audio_capture(MicrophoneConfig.from_env({"MICROPHONE_BACKEND": "sim"}))
 
     assert isinstance(capture, SimAudioCapture)
-    assert (QUIET_CHUNKS, TONE_CHUNKS) == (5, 80)  # the pattern of the seed: 0.3 s of noise, 5 s of tone
+    assert (QUIET_CHUNKS, TONE_CHUNKS) == (
+        5,
+        80,
+    )  # the pattern of the seed: 0.3 s of noise, 5 s of tone
     assert (capture._quiet_chunks, capture._tone_chunks) == (QUIET_CHUNKS, TONE_CHUNKS)

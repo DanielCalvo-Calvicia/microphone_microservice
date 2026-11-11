@@ -35,7 +35,7 @@ Working on Windows, **was retested on a real headset microphone on 2026-11-10** 
 
 ```bash
 pip install -r requirements.windows.txt   # Linux / Raspberry Pi: requirements.linux.txt (runtime only, exact versions)
-pip install -r requirements-dev.txt        # tests and lint (not needed to run, never installed by the deploy tool)
+pip install -r requirements.dev.txt        # tests and lint (not needed to run, never installed by the deploy tool)
 python main.py
 ```
 
@@ -80,7 +80,7 @@ Non-stream answers use the envelope `action / status / status_code / message / t
 
 Stream events (`contracts.stream`, `MICROPHONE_OUTBOUND`): `stream_started` (`message`, `sample_rate`, `channels`), then one `utterance` (`bytes_base64`, raw PCM16 mono, and its `sample_rate`) per finished utterance, then `completed` (`reason`, `output_bytes_base64` always empty) when the capture ends, or an `error` event (`code: capture_failed`, `recoverable: false`) if the device fails mid-stream. The microphone cuts what it hears into utterances (silence detection lives here, not in STT): an utterance starts when the volume reaches the start threshold and ends after `MICROPHONE_SILENCE_LIMIT_SECONDS` of silence, and the utterance in progress is sent when the capture is closed (it is lost if the device fails). The cutting is always on; each treatment has its own `MICROPHONE_*` variable.
 
-HTTP status codes of failures (`infrastructure/inbound/http/http_error_mapper.py`): `409` capture already active / not active, `422` invalid audio format or `sample_rate` that differs from the active capture, `503` no usable input device, `500` anything else (device read/close failures).
+HTTP status codes of failures (`infrastructure/inbound/http/errors/http_error_mapper.py`): `409` capture already active / not active, `422` invalid audio format or `sample_rate` that differs from the active capture, `503` no usable input device, `500` anything else (device read/close failures).
 
 Notes:
 
@@ -98,7 +98,7 @@ windows\Scripts\python.exe -m mypy .
 windows\Scripts\python.exe tests\simple.py  # end to end, needs a real microphone
 ```
 
-Result on 2026-11-10: `171 passed` in 2.3 s, ruff `All checks passed!`, mypy `no issues found in 56 source files` (142 passed on 2026-11-09, 127 on 2026-11-05). `tests/simple.py` was found stale on the real microphone (2 of 7 checks failed because of the script) and fixed (7 of 7 on `sim`, not re-run on the real device); the sounddevice adapter and the cutting ran on a real headset microphone on 2026-11-10 (T-04.1). `black` is configured in `pyproject.toml` and listed in the requirements; it was not run.
+Result on 2026-11-11: `184 passed` in 2.6 s, ruff `All checks passed!`, mypy `no issues found in 71 source files` (171 passed on 2026-11-10 before the stt-style restructure added `test_dtos.py` and `test_ports.py`, 142 on 2026-11-09, 127 on 2026-11-05). `tests/simple.py` was found stale on the real microphone (2 of 7 checks failed because of the script) and fixed (7 of 7 on `sim`, not re-run on the real device); the sounddevice adapter and the cutting ran on a real headset microphone on 2026-11-10 (T-04.1). `black` is configured in `pyproject.toml` and listed in the requirements; it was not run.
 
 ## Project layout
 
@@ -106,10 +106,10 @@ Result on 2026-11-10: `171 passed` in 2.3 s, ruff `All checks passed!`, mypy `no
 main.py            entry point (calls main_flow)
 main_flow/         config, logging init, uvicorn, graceful shutdown (releases the device)
 composition_root/  the only place concrete adapters are wired together
-infrastructure/    config, HTTP (inbound: handler, envelope, error mapper, NDJSON events) and sounddevice (outbound) adapters
-application/       use-case service, utterance stream, ports, DTOs, application errors
+infrastructure/    config, HTTP (inbound: handler, routes/, response/, errors/) and capture (outbound: sounddevice, sim) adapters
+application/       use-case service, utterance stream, ports (inbound, service, outbound), DTOs (inbound, outbound), application errors
 domain/            entities (Microphone, UtteranceSegmenter), value objects, pure audio operations
-tests/             domain, application, infrastructure, composition_root, architecture; simple.py (needs a real microphone)
+tests/             domain, application, infrastructure, composition_root, main_flow, architecture; simple.py (needs a real microphone)
 vendor/            the bundled contracts wheel (0.16.0)
 docs/              architecture, api, configuration, operations, requirements, security, deployment, decisions, proposals
 ```
@@ -144,7 +144,7 @@ Dependencies point inward only (`infrastructure -> application -> domain`); `tes
 | [docs/security/security.md](docs/security/security.md) | Access, privacy, secrets, supply chain |
 | [docs/deployment/deployment.md](docs/deployment/deployment.md) | How the deployment tool runs it; Windows, Linux, Docker |
 | [docs/tasks/README.md](docs/tasks/README.md) | Task plan; [docs/tasks/ORDER.md](docs/tasks/ORDER.md) is the order to follow, with the state and the last update of every task |
-| [docs/setup/00_README.md](docs/setup/00_README.md) | The project context in 17 sub-forms, and the [questions for the maintainer](docs/setup/questionnaires/Q01_open-questions.md) |
+| [docs/setup/00_README.md](docs/setup/00_README.md) | The project context in 17 sub-forms, and the [questions for the maintainer](docs/questionnaires/Q01_open-questions.md) |
 | [docs/decisions/](docs/decisions/) | Architecture decision records (ADR-001 to ADR-006) |
 | [docs/proposals/](docs/proposals/) | Changes proposed and not built (PR-001, PR-002) |
 | [docs/README.md](docs/README.md) | Index of the documentation, including the history (`architecture/PYTHON_MIGRATION_PLAN.md`, `old/`) |

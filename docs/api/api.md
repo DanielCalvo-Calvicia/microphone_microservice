@@ -74,7 +74,7 @@ Releases the device and ends the open `/stream` (with `completed`). Idempotent: 
 
 ## Status codes of failures
 
-From `infrastructure/inbound/http/http_error_mapper.py`:
+From `infrastructure/inbound/http/errors/http_error_mapper.py`:
 
 | Status | Cause |
 |---|---|

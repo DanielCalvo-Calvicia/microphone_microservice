@@ -12,7 +12,7 @@
 | Logging | `../shared-logging/docs/logging.md` | Log fields, trace propagation |
 | Deployment | `../deployment/docs/DEPLOYMENT.md`, `../deployment/config/catalogue.toml` | How it is built, started, checked |
 | Deployment audit | `docs/deployment_audit/microphone.md` (2026-11-04, verified against the code) | The gaps seen from the deployment side; the source of PR-001 and PR-002 |
-| Decisions and questionnaires | `docs/decisions`, `docs/proposals`, `docs/setup/questionnaires` | What was decided (the newest answer wins) |
+| Decisions and questionnaires | `docs/decisions`, `docs/proposals`, `docs/questionnaires` | What was decided (the newest answer wins) |
 | Git history | `git log` | When things changed |
 
 Stale, do not trust: `.engram/` (5 short notes from the first refactor), `docs/old/` (legacy design), the "Known remaining debt" lines of the pre-2026-11-05 architecture document.
@@ -32,6 +32,6 @@ Stale, do not trust: `.engram/` (5 short notes from the first refactor), `docs/o
 
 **Blocking:** none for the documentation. T-02.1 (the sim backend decision) is `awaiting-user`: Q01-1 and Q01-2.
 
-**Important (non-blocking):** all of [questionnaires/Q01_open-questions.md](questionnaires/Q01_open-questions.md): the sim default, the variable name, the `dotenv` change in `deployment`, the meter default, the stale folders, the staging and production env files, and when a hardware session is possible.
+**Important (non-blocking):** all of [questionnaires/Q01_open-questions.md](../questionnaires/Q01_open-questions.md): the sim default, the variable name, the `dotenv` change in `deployment`, the meter default, the stale folders, the staging and production env files, and when a hardware session is possible.
 
 **Later ideas:** a filtered resampler; a PulseAudio bridge for Docker on Windows; a project-wide authentication design.

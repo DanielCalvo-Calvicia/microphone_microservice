@@ -26,7 +26,7 @@ Only what can be verified in the repository. Labels: **Implemented** (in the cod
 
 ## Supply chain
 
-- **Supply chain:** since 2026-11-09 (T-03.2) the runtime requirements pin the four packages the service imports to exact versions, the bundled `contracts` wheel is named by version, and the development tools are in `requirements-dev.txt`, which the deploy tool never installs. **Not locked:** the packages those depend on (no lock file). See `docs/proposals/PR-002-dotenv-and-requirements-split.md`.
+- **Supply chain:** since 2026-11-09 (T-03.2) the runtime requirements pin the four packages the service imports to exact versions, the bundled `contracts` wheel is named by version, and the development tools are in `requirements.dev.txt`, which the deploy tool never installs. **Not locked:** the packages those depend on (no lock file). See `docs/proposals/PR-002-dotenv-and-requirements-split.md`.
 - **Implemented:** `contracts` comes from a wheel bundled in `vendor/`, refreshed by `contracts/scripts/bundle.py`, never edited by hand.
 
 - **A simulated device is not a security feature (T-06.5):** `MICROPHONE_BACKEND=sim` generates a tone and opens no device, so it listens to nothing and captures nothing; it does not hide anything either, because `/available` says `simulated microphone` in its `reason` and the service logs a warning at start. The risk it adds is operational: the deploy catalogue presets `sim`, so a machine with a real microphone that forgets `MICROPHONE_BACKEND = "real"` in its `config/local/microphone.toml` is healthy and deaf.

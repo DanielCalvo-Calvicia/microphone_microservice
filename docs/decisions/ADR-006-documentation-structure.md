@@ -13,3 +13,5 @@ Left out on purpose: the Engram intake prompts, `PROMPTS.md` and the Engram Clou
 ## Consequences
 - Positive: one home per fact; a stale number is a documentation bug with a named place to fix it.
 - Negative: more files to keep in step for a small service; the rule in `CLAUDE.md` is the only thing that enforces it (there is no test, unlike the layout rules).
+
+> **Update 2026-11-11:** the structure now also mirrors `stt_microservice`: the questionnaires (the index and Q01) moved from `docs/setup/questionnaires/` to `docs/questionnaires/`, beside Q02, and the dev requirements file is `requirements.dev.txt`. `docs/setup/`, `docs/proposals/` and `docs/README.md` have no counterpart in stt and were kept.

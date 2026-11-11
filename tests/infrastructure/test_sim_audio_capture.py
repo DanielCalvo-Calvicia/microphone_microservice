@@ -6,7 +6,7 @@ from array import array
 
 import pytest
 
-from application.dtos.start_stream_inbound import StartStreamInboundDTO
+from application.dtos.inbound.start_stream_inbound import StartStreamInboundDTO
 from application.services.microphone_service import MicrophoneService
 from domain.value_objects.audio_format import AudioFormat
 from infrastructure.outbound.sim_capture.sim_audio_capture import SimAudioCapture
@@ -116,7 +116,9 @@ def test_a_slow_consumer_does_not_make_the_stream_drift():
         await read(stream, 3)
         assert len(clock.sleeps) == before  # the next chunks were already due: no sleep
         await read(stream, 3)
-        assert clock.now - start == pytest.approx(7 * CHUNK_SECONDS)  # the 7th chunk is due at 7 chunk durations
+        assert clock.now - start == pytest.approx(
+            7 * CHUNK_SECONDS
+        )  # the 7th chunk is due at 7 chunk durations
 
     run(scenario())
 
@@ -138,8 +140,12 @@ def test_close_ends_the_iteration_is_idempotent_and_does_not_call_the_terminatio
 def test_every_open_starts_the_pattern_again():
     async def scenario():
         capture = new_capture(FakeClock(), quiet_chunks=2, tone_chunks=2)
-        first = [rms(c) for c in await read(await capture.open_stream(AudioFormat(RATE, 1, CHUNK)), 4)]
-        second = [rms(c) for c in await read(await capture.open_stream(AudioFormat(RATE, 1, CHUNK)), 4)]
+        first = [
+            rms(c) for c in await read(await capture.open_stream(AudioFormat(RATE, 1, CHUNK)), 4)
+        ]
+        second = [
+            rms(c) for c in await read(await capture.open_stream(AudioFormat(RATE, 1, CHUNK)), 4)
+        ]
         assert first == second and first[2] > 3000
 
     run(scenario())
@@ -162,8 +168,12 @@ def test_through_the_service_the_pattern_comes_out_as_one_utterance_with_its_pre
         # 80 chunks of tone (5.1 s) plus the pre-roll (the quiet chunks before it) plus the trailing silence
         assert 80 * CHUNK_SECONDS < seconds < 80 * CHUNK_SECONDS + 8
         first_chunk = utterances[0][: CHUNK * 2]
-        assert 0 < rms(first_chunk) < 50  # it starts with the room noise heard before the tone (pre-roll)
-        assert clock.now - 100.0 > 80 * CHUNK_SECONDS  # and it was paced: the whole pattern took its real duration
+        assert (
+            0 < rms(first_chunk) < 50
+        )  # it starts with the room noise heard before the tone (pre-roll)
+        assert (
+            clock.now - 100.0 > 80 * CHUNK_SECONDS
+        )  # and it was paced: the whole pattern took its real duration
 
     run(scenario())
 
@@ -209,9 +219,9 @@ def test_a_close_followed_by_a_cancelled_read_is_not_a_termination():
         async def never_wakes(seconds: float) -> None:
             await asyncio.Event().wait()
 
-        stream = await SimAudioCapture(sleep=never_wakes, monotonic=FakeClock().monotonic).open_stream(
-            AudioFormat(RATE, 1, CHUNK)
-        )
+        stream = await SimAudioCapture(
+            sleep=never_wakes, monotonic=FakeClock().monotonic
+        ).open_stream(AudioFormat(RATE, 1, CHUNK))
         fired: list[int] = []
         stream.on_terminated(lambda: fired.append(1))
         task = asyncio.create_task(read(stream, 1))
@@ -230,9 +240,9 @@ def test_the_termination_callback_fires_only_once_even_with_two_readers():
         async def never_wakes(seconds: float) -> None:
             await asyncio.Event().wait()
 
-        stream = await SimAudioCapture(sleep=never_wakes, monotonic=FakeClock().monotonic).open_stream(
-            AudioFormat(RATE, 1, CHUNK)
-        )
+        stream = await SimAudioCapture(
+            sleep=never_wakes, monotonic=FakeClock().monotonic
+        ).open_stream(AudioFormat(RATE, 1, CHUNK))
         fired: list[int] = []
         stream.on_terminated(lambda: fired.append(1))
         tasks = [asyncio.create_task(read(stream, 1)) for _ in range(2)]

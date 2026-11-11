@@ -15,7 +15,7 @@ Keep the documentation true to the repository: document only what exists, mark p
 | Trigger | Update |
 |---|---|
 | Any task done | its status in this folder's README board and in [ORDER.md](ORDER.md); the status table of `README.md`; `docs/requirements/requirements.md` (status and where of each requirement it touches); the work item of `docs/setup/16_work-items.md` |
-| A decision is taken | an ADR for each non-obvious one (`docs/decisions/`); the task's *Resolution*; `docs/setup/13_decisions-and-overrides.md`; the question in `docs/setup/questionnaires/` (the answer after `A:`, and its row in `00_README.md`) |
+| A decision is taken | an ADR for each non-obvious one (`docs/decisions/`); the task's *Resolution*; `docs/setup/13_decisions-and-overrides.md`; the question in `docs/questionnaires/` (the answer after `A:`, and its row in `00_README.md`) |
 | The layout or a convention changes | the ADR it changes (a dated note), `docs/tasks/README.md` sections 3 and 3.1, `docs/architecture/architecture.md`, `docs/setup/10_architecture.md` |
 | A variable is added, changed or removed | `.env.example`, `README.md`, `docs/configuration/environment-variables.md`, `docs/setup/06_inputs-and-outputs.md`, `CLAUDE.md` (Rules), and in `deployment` the manual and the generated toml |
 | A route, a field, an event or a status changes | `docs/api/api.md`, `README.md`, `docs/requirements/requirements.md`, `docs/setup/06_inputs-and-outputs.md`, and `contracts` first |

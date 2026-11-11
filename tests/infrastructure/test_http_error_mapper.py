@@ -1,6 +1,6 @@
 from application.errors import FormatMismatch, MicrophoneUnavailable
 from domain.errors import CaptureAlreadyActive, CaptureNotActive, InvalidAudioFormat
-from infrastructure.inbound.http.http_error_mapper import map_error
+from infrastructure.inbound.http.errors.http_error_mapper import map_error
 
 
 def test_errors_map_to_natural_statuses():

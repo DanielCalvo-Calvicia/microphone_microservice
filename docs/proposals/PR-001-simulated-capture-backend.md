@@ -1,6 +1,6 @@
 # PR-001 — A simulated capture backend
 
-**Status:** Accepted 2026-11-09 as [ADR-007](../decisions/ADR-007-simulated-capture-backend.md) (decisions answered in Q02, recommended answers); not built yet. Earlier status: Proposed, not built (source: the deployment audit of 2026-11-04, `docs/deployment_audit/microphone.md`; requirement FR-15). Planned as epic [T-02](../tasks/T-02_simulated-backend/T-02_simulated-backend.md); the decisions (default, variable, signal) wait for the maintainer in [Q01](../setup/questionnaires/Q01_open-questions.md) 1 to 3.
+**Status:** Accepted 2026-11-09 as [ADR-007](../decisions/ADR-007-simulated-capture-backend.md) (decisions answered in Q02, recommended answers); not built yet. Earlier status: Proposed, not built (source: the deployment audit of 2026-11-04, `docs/deployment_audit/microphone.md`; requirement FR-15). Planned as epic [T-02](../tasks/T-02_simulated-backend/T-02_simulated-backend.md); the decisions (default, variable, signal) wait for the maintainer in [Q01](../questionnaires/Q01_open-questions.md) 1 to 3.
 
 ## Problem
 There is no simulation backend in production code. Without a device `/available` is `is_available: false`, Brain's start-up preflight requires it, and the deployment readiness check (`ready = "/available"`, 15 s grace) reports the service as failed. A machine without a microphone cannot run the pipeline, and `update` can roll back a healthy commit.

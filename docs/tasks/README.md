@@ -31,7 +31,7 @@ Kinds: `code`, `test`, `decision`, `docs`, `manual` (needs a real microphone, a 
 
 ## 2. Execution protocol
 
-1. Pick the first task whose status is `todo` and whose `Depends on` tasks are all `done`. A decision task that is `awaiting-user` **stops the chain**: ask the maintainer (the questions are in [../questionnaires/Q02_deployment-readiness.md](../questionnaires/Q02_deployment-readiness.md) and, for Q01-5 to Q01-10, [../setup/questionnaires/Q01_open-questions.md](../setup/questionnaires/Q01_open-questions.md)), record the answer in the task's *Resolution* and in the questionnaire, then continue.
+1. Pick the first task whose status is `todo` and whose `Depends on` tasks are all `done`. A decision task that is `awaiting-user` **stops the chain**: ask the maintainer (the questions are in [../questionnaires/Q02_deployment-readiness.md](../questionnaires/Q02_deployment-readiness.md) and, for Q01-5 to Q01-10, [../questionnaires/Q01_open-questions.md](../questionnaires/Q01_open-questions.md)), record the answer in the task's *Resolution* and in the questionnaire, then continue.
 2. Read `../CLAUDE.md` (workspace) and the service `CLAUDE.md` first; for T-06 also `deployment/CLAUDE.md`. Follow them literally: layout, wire format, logging, audio rules.
 3. Create or modify only the files listed under *Files* (tests included). Another file, folder or dependency means updating the task first.
 4. Implement, then run the task's *Verification* and the baseline of section 3. A task is `done` only when every acceptance criterion passes. **Code tasks:** when a defect is fixed, write the test first and show it fails on the old code; after the change, run one-line mutations of the new code with a script that restores the file in a `finally` (aim for all caught; a missed mutation means a missing test or dead code).
@@ -66,13 +66,13 @@ From the service folder, with its own venv:
 ```
 main.py, main_flow/            entry point and start-up/shutdown (no wiring, no rules)
 composition_root/              the only place concrete adapters are chosen (dependencies/, containers/)
-application/                   ports/inbound, ports/outbound, services, dtos, errors
+application/                   ports/{inbound,service,outbound}, services, dtos/{inbound,outbound}, errors
 domain/                        entities, value objects, operations (pure, standard library only)
-infrastructure/                config/, inbound/http/, outbound/<adapter>/
+infrastructure/                config/, inbound/http/{routes,response,errors}, outbound/<adapter>/
 tests/                         domain, application, infrastructure, composition_root, architecture (mirror of the code); simple.py (real microphone)
 ```
 
-A new outbound adapter lives in `infrastructure/outbound/<name>/` and implements `AudioCapturePort` and `AudioStreamPort`; the choice between adapters is made only in `composition_root/dependencies/microphone_dependencies.py`.
+A new outbound adapter lives in `infrastructure/outbound/<name>/` and implements `AudioCapturePort` and `AudioStreamPort`; the choice between adapters is made only in `composition_root/dependencies/audio_capture_dependency.py` (it was `microphone_dependencies.py` until 2026-11-11).
 
 ## 4. Facts the tasks rely on
 

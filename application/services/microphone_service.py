@@ -2,11 +2,11 @@ import asyncio
 
 from shared_logging import get_logger
 
-from application.dtos.start_stream_inbound import StartStreamInboundDTO
-from application.dtos.stream_outbound import StreamOutboundDTO
-from application.ports.inbound.microphone_streaming_port import MicrophoneStreamingPort
+from application.dtos.inbound.start_stream_inbound import StartStreamInboundDTO
+from application.dtos.outbound.stream_outbound import StreamOutboundDTO
 from application.ports.outbound.audio_capture_port import AudioCapturePort
 from application.ports.outbound.audio_stream_port import AudioStreamPort
+from application.ports.service.microphone_service_port import MicrophoneServicePort
 from application.services.utterance_stream import utterances_of
 from domain.entities.microphone import Microphone
 from domain.entities.utterance_segmenter import UtteranceSegmenter
@@ -17,7 +17,7 @@ from domain.value_objects.input_treatment import InputTreatment
 logger = get_logger(__name__)
 
 
-class MicrophoneService(MicrophoneStreamingPort):
+class MicrophoneService(MicrophoneServicePort):
     """Orchestrates the microphone use cases. Business rules live in the domain.
 
     The stream it hands out is not the raw capture: it is the capture cut into utterances

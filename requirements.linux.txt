@@ -8,7 +8,7 @@ python-dotenv==1.2.4
 sounddevice==0.5.5
 numpy==2.4.5
 
-# Tests and lint are in requirements-dev.txt, not here: the deploy tool installs this file.
+# Tests and lint are in requirements.dev.txt, not here: the deploy tool installs this file.
 
 # Shared logging + distributed tracing (local checkout; see shared-logging/README.md)
 -e ../shared-logging

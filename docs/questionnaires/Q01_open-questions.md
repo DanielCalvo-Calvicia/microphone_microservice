@@ -2,7 +2,7 @@
 
 **Awaiting the maintainer; nothing is answered yet.** These are the points that the code, the git history and the deployment audit do not settle. Each gives my **recommended** answer; none of them is built or changed until you answer. Same format as the other projects: write after `A:`; `UNKNOWN`, `NOT APPLICABLE` and `LATER` are valid; never write secrets.
 
-Blocking: questions 1 to 3 stop task T-02.1, and question 4 stops T-03.3 (see [../../tasks/ORDER.md](../../tasks/ORDER.md)).
+Blocking: questions 1 to 3 stop task T-02.1, and question 4 stops T-03.3 (see [../tasks/ORDER.md](../tasks/ORDER.md)).
 
 ---
 
